@@ -390,6 +390,118 @@ header p.subtitle {
   vertical-align: middle;
 }
 
+/* Accessibility bar */
+#access-bar {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  gap: 12px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+  font-size: 0.65rem;
+  color: var(--phosphor-dim);
+}
+#access-bar span { letter-spacing: 0.1em; }
+.access-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--phosphor-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  padding: 2px 8px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+.access-btn:hover, .access-btn.active {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor-glow);
+}
+/* Font size levels */
+body.font-sm { font-size: 13px; }
+body.font-md { font-size: 16px; }
+body.font-lg { font-size: 20px; }
+body.font-sm .score-num { font-size: 2rem; }
+body.font-md .score-num { font-size: 3rem; }
+body.font-lg .score-num { font-size: 4rem; }
+body.font-sm header h1 { font-size: clamp(1.4rem,4vw,2.2rem); }
+body.font-lg header h1 { font-size: clamp(2.2rem,6vw,4rem); }
+/* Contrast */
+body.contrast-high { --phosphor: #00ff41; --phosphor-dim: #44ff88; --bg: #000; --panel-bg: #000; --panel-border: #00ff4166; }
+body.contrast-low  { --phosphor: #00cc33; --phosphor-dim: #006618; --bg: #060d06; --panel-bg: #060d06; --panel-border: #00441122; }
+
+/* Footer */
+#footer {
+  text-align: center;
+  padding: 10px;
+  border-top: 1px solid var(--panel-border);
+  font-size: 0.62rem;
+  color: var(--phosphor-dim);
+  letter-spacing: 0.1em;
+  margin-top: 8px;
+}
+#footer a { color: var(--phosphor-dim); text-decoration: none; cursor: pointer; }
+#footer a:hover { color: var(--phosphor); }
+
+/* Modal */
+.modal-overlay {
+  display: none;
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: rgba(0,0,0,0.85);
+  z-index: 20000;
+  overflow-y: auto;
+  padding: 40px 20px;
+}
+.modal-overlay.open { display: block; }
+.modal-box {
+  max-width: 700px;
+  margin: 0 auto;
+  background: var(--panel-bg);
+  border: 1px solid var(--phosphor);
+  box-shadow: 0 0 40px var(--phosphor-glow);
+  padding: 28px 32px;
+  position: relative;
+}
+.modal-box h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 1rem;
+  letter-spacing: 0.2em;
+  margin-bottom: 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid var(--panel-border);
+}
+.modal-box h3 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.75rem;
+  letter-spacing: 0.15em;
+  color: var(--phosphor-dim);
+  margin: 18px 0 8px;
+}
+.modal-box p { font-size: 0.78rem; line-height: 1.7; color: var(--phosphor-dim); margin-bottom: 8px; }
+.modal-box p strong { color: var(--phosphor); }
+.modal-box ul { padding-left: 16px; margin-bottom: 8px; }
+.modal-box ul li { font-size: 0.75rem; color: var(--phosphor-dim); line-height: 1.8; }
+.modal-box ul li strong { color: var(--phosphor); }
+.modal-close {
+  position: absolute;
+  top: 12px; right: 16px;
+  background: transparent;
+  border: 1px solid var(--phosphor-dim);
+  color: var(--phosphor);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8rem;
+  padding: 4px 10px;
+  cursor: pointer;
+}
+.modal-close:hover { border-color: var(--phosphor); box-shadow: 0 0 8px var(--phosphor-glow); }
+.stack-table { width: 100%; border-collapse: collapse; font-size: 0.72rem; margin-top: 6px; }
+.stack-table th { text-align: left; color: var(--phosphor); padding: 4px 8px; border-bottom: 1px solid var(--panel-border); font-family: 'Orbitron', sans-serif; font-size: 0.6rem; letter-spacing: 0.1em; }
+.stack-table td { padding: 4px 8px; border-bottom: 1px solid var(--panel-border); color: var(--phosphor-dim); }
+.stack-table td:first-child { color: var(--phosphor); }
+
 /* Notification */
 #notification {
   position: fixed;
@@ -422,6 +534,17 @@ header p.subtitle {
   <button class="lang-btn" onclick="setLang('hr')">HR</button>
   <button class="lang-btn" onclick="setLang('sr')">SR</button>
   <button class="lang-btn" onclick="setLang('sr-cyrl')">СР</button>
+</div>
+
+<div id="access-bar">
+  <span data-i18n="access_font">FONT:</span>
+  <button class="access-btn" id="font-sm" onclick="setFontSize('sm')">A</button>
+  <button class="access-btn active" id="font-md" onclick="setFontSize('md')">A+</button>
+  <button class="access-btn" id="font-lg" onclick="setFontSize('lg')">A++</button>
+  <span style="margin-left:8px" data-i18n="access_contrast">CONTRAST:</span>
+  <button class="access-btn" id="con-high" onclick="setContrast('high')">&#9675;&#9675;</button>
+  <button class="access-btn active" id="con-norm" onclick="setContrast('norm')">&#9675;</button>
+  <button class="access-btn" id="con-low" onclick="setContrast('low')">&#9675;&#9675;&#9675;</button>
 </div>
 
 <div id="app">
@@ -1671,6 +1794,45 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{ keys[e.key]=false; });
 
 // =====================================================================
+// ACCESSIBILITY
+// =====================================================================
+function setFontSize(size) {
+  document.body.classList.remove('font-sm','font-md','font-lg');
+  document.body.classList.add('font-'+size);
+  ['font-sm','font-md','font-lg'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('active', id==='font-'+size);
+  });
+  localStorage.setItem('pong_font', size);
+}
+
+function setContrast(level) {
+  document.body.classList.remove('contrast-high','contrast-low');
+  if(level!=='norm') document.body.classList.add('contrast-'+level);
+  ['con-high','con-norm','con-low'].forEach(id=>{
+    const el=document.getElementById(id);
+    if(el) el.classList.toggle('active', id==='con-'+level);
+  });
+  localStorage.setItem('pong_contrast', level);
+}
+
+function openModal(id) { document.getElementById(id).classList.add('open'); }
+function closeModal(id) { document.getElementById(id).classList.remove('open'); }
+
+// Close modal on overlay click
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click',e=>{ if(e.target===m) m.classList.remove('open'); });
+});
+
+// Restore accessibility prefs
+(function(){
+  const f = localStorage.getItem('pong_font') || 'md';
+  const c = localStorage.getItem('pong_contrast') || 'norm';
+  setFontSize(f);
+  setContrast(c);
+})();
+
+// =====================================================================
 // INIT
 // =====================================================================
 loadAgents();
@@ -1689,5 +1851,82 @@ document.getElementById('status-mode').textContent='MODE: '+currentMode.toUpperC
   });
 });
 </script>
+<div id="footer">
+  <span>PONG AI TRAINING LAB &nbsp;|&nbsp; <strong>v1.1</strong> &nbsp;|&nbsp; 2026 &nbsp;|&nbsp; fladroid</span>
+  &nbsp;&mdash;&nbsp;
+  <a onclick="openModal('about-modal')" data-i18n="footer_about">ABOUT</a>
+  &nbsp;|&nbsp;
+  <a onclick="openModal('help-modal')" data-i18n="footer_help">USER GUIDE</a>
+</div>
+
+<!-- ABOUT MODAL -->
+<div class="modal-overlay" id="about-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('about-modal')">✕ CLOSE</button>
+    <h2 data-i18n="about_title">▸ ABOUT THIS PROJECT</h2>
+    <p data-i18n="about_p1"><strong>PONG AI Training Lab</strong> is an educational project built to explore and demonstrate the core principles of Reinforcement Learning through a classic game.</p>
+    <p data-i18n="about_p2">The primary goal is <strong>learning by doing</strong> — by training AI agents in this environment, users gain intuitive understanding of how machines learn from experience without explicit programming.</p>
+    <h3 data-i18n="about_concepts">CONCEPTS DEMONSTRATED</h3>
+    <ul>
+      <li data-i18n="about_c1"><strong>Q-Learning</strong> — a model-free RL algorithm where the agent learns the value of actions in states</li>
+      <li data-i18n="about_c2"><strong>Self-play</strong> — training by playing against oneself, a technique used in AlphaGo and AlphaZero</li>
+      <li data-i18n="about_c3"><strong>Exploration vs Exploitation</strong> — controlled by the epsilon (ε) parameter</li>
+      <li data-i18n="about_c4"><strong>Hyperparameter sensitivity</strong> — compare agents trained with different parameters</li>
+      <li data-i18n="about_c5"><strong>Elo-like rating</strong> — adjusted by training volume to reward skill over brute-force training</li>
+    </ul>
+    <h3 data-i18n="about_stack">TECHNOLOGY STACK</h3>
+    <table class="stack-table">
+      <tr><th>COMPONENT</th><th>TECHNOLOGY</th><th>VERSION</th></tr>
+      <tr><td>Runtime</td><td>Browser (Vanilla JS, no frameworks)</td><td>ES2022+</td></tr>
+      <tr><td>AI Algorithm</td><td>Q-Learning (tabular, discretized state space)</td><td>custom</td></tr>
+      <tr><td>Rendering</td><td>HTML5 Canvas API</td><td>—</td></tr>
+      <tr><td>Fonts</td><td>Share Tech Mono, Orbitron (Google Fonts)</td><td>—</td></tr>
+      <tr><td>Persistence</td><td>Browser localStorage</td><td>—</td></tr>
+      <tr><td>Hosting</td><td>GitHub Pages</td><td>—</td></tr>
+      <tr><td>Server (dev)</td><td>Ubuntu 24.04 LTS (Strato.de)</td><td>24.04</td></tr>
+      <tr><td>Version control</td><td>Git / GitHub</td><td>2.43</td></tr>
+    </table>
+    <h3>VERSION</h3>
+    <p>v1.1 — March 2026</p>
+  </div>
+</div>
+
+<!-- HELP MODAL -->
+<div class="modal-overlay" id="help-modal">
+  <div class="modal-box">
+    <button class="modal-close" onclick="closeModal('help-modal')">✕ CLOSE</button>
+    <h2 data-i18n="help_title">▸ USER GUIDE</h2>
+    <h3 data-i18n="help_step1">STEP 1 — CREATE AN AGENT</h3>
+    <p data-i18n="help_step1_p">Click <strong>+ NEW AGENT</strong> in the left panel. Enter a name and optionally adjust the training parameters. Default values are good starting points. Click <strong>CREATE</strong>.</p>
+    <h3 data-i18n="help_step2">STEP 2 — TRAIN THE AGENT</h3>
+    <p data-i18n="help_step2_p">Select the agent from the list, then click <strong>TRAIN</strong>. The agent will play thousands of simulated games against itself at high speed (no rendering). Progress is shown in the training bar. Training is complete when the bar reaches 100%.</p>
+    <h3 data-i18n="help_step3">STEP 3 — PLAY</h3>
+    <p data-i18n="help_step3_p">Choose a <strong>Game Mode</strong> from the right panel, configure players in <strong>Match Setup</strong>, and click <strong>START</strong>.</p>
+    <h3 data-i18n="help_controls">KEYBOARD CONTROLS</h3>
+    <ul>
+      <li><strong>W / S</strong> — Left player paddle (up / down)</li>
+      <li><strong>↑ / ↓</strong> — Right player paddle (up / down)</li>
+    </ul>
+    <h3 data-i18n="help_params">TRAINING PARAMETERS</h3>
+    <ul>
+      <li><strong>Episodes</strong> — Number of training games. More = stronger agent, slower training.</li>
+      <li><strong>Learning Rate α</strong> — How fast the agent updates its knowledge (0.001–1.0). High = fast but unstable.</li>
+      <li><strong>Discount γ</strong> — How much the agent values future rewards (0.5–0.999). High = long-term thinking.</li>
+      <li><strong>Epsilon ε</strong> — Initial exploration rate. High = more random early moves.</li>
+      <li><strong>ε Decay</strong> — How fast exploration decreases. Close to 1.0 = slow decay.</li>
+      <li><strong>Ball Speed</strong> — Speed used during training. Match this to the match speed for best results.</li>
+    </ul>
+    <h3 data-i18n="help_rating">RATING SYSTEM</h3>
+    <p data-i18n="help_rating_p">Agents earn rating points when they win. The rating gain is adjusted by a <strong>training factor</strong>: a heavily trained agent earns fewer points when beating a lightly trained one. This prevents brute-force training from dominating the leaderboard.</p>
+    <h3 data-i18n="help_modes">GAME MODES</h3>
+    <ul>
+      <li><strong>Human vs Agent</strong> — You play (W/S) against a trained AI.</li>
+      <li><strong>Agent vs Agent</strong> — Watch two trained AIs compete.</li>
+      <li><strong>Human vs Human</strong> — Two players on one keyboard.</li>
+      <li><strong>Agent vs Self</strong> — Agent plays against an identical copy of itself.</li>
+    </ul>
+  </div>
+</div>
+
 </body>
 </html>
