@@ -432,6 +432,33 @@ body.font-lg header h1 { font-size: clamp(2.2rem,6vw,4rem); }
 body.contrast-high { --phosphor: #00ff41; --phosphor-dim: #44ff88; --bg: #000; --panel-bg: #000; --panel-border: #00ff4166; }
 body.contrast-low  { --phosphor: #00cc33; --phosphor-dim: #006618; --bg: #060d06; --panel-bg: #060d06; --panel-border: #00441122; }
 
+/* Import/Export */
+#io-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 5px 12px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+  font-size: 0.65rem;
+  color: var(--phosphor-dim);
+}
+#io-bar span { letter-spacing: 0.1em; }
+.io-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--phosphor-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.68rem;
+  padding: 2px 10px;
+  cursor: pointer;
+  letter-spacing: 0.05em;
+  transition: all 0.2s;
+}
+.io-btn:hover { border-color: var(--amber); color: var(--amber); box-shadow: 0 0 6px rgba(255,176,0,0.3); }
+.io-btn.import { border-color: var(--panel-border); }
+.io-btn.import:hover { border-color: var(--phosphor); color: var(--phosphor); box-shadow: 0 0 6px var(--phosphor-glow); }
+
 /* Footer */
 #footer {
   text-align: center;
@@ -545,6 +572,15 @@ body.contrast-low  { --phosphor: #00cc33; --phosphor-dim: #006618; --bg: #060d06
   <button class="access-btn" id="con-high" onclick="setContrast('high')">&#9675;&#9675;</button>
   <button class="access-btn active" id="con-norm" onclick="setContrast('norm')">&#9675;</button>
   <button class="access-btn" id="con-low" onclick="setContrast('low')">&#9675;&#9675;&#9675;</button>
+</div>
+
+<div id="io-bar">
+  <span data-i18n="io_agents">AGENTS I/O:</span>
+  <button class="io-btn" onclick="exportAllJSON()" data-i18n="io_exp_json">⬇ EXPORT ALL (JSON)</button>
+  <button class="io-btn" onclick="exportAllCSV()" data-i18n="io_exp_csv">⬇ EXPORT STATS (CSV)</button>
+  <button class="io-btn import" onclick="triggerImport('json')" data-i18n="io_imp_json">⬆ IMPORT JSON</button>
+  <button class="io-btn import" onclick="triggerImport('csv')" data-i18n="io_imp_csv">⬆ IMPORT CSV</button>
+  <input type="file" id="file-input" accept=".json,.csv" style="display:none" onchange="handleImport(event)">
 </div>
 
 <div id="app">
@@ -776,6 +812,11 @@ const LANGS = {
     train_agent_first: "Train an agent first",
     footer_about: "ABOUT",
     footer_help: "USER GUIDE",
+    io_agents: "AGENTS I/O:",
+    io_exp_json: "⬇ EXPORT ALL (JSON)",
+    io_exp_csv: "⬇ EXPORT STATS (CSV)",
+    io_imp_json: "⬆ IMPORT JSON",
+    io_imp_csv: "⬆ IMPORT CSV",
   },
   de: {
     subtitle: "KI-TRAININGSLABOR — SELBSTSPIEL REINFORCEMENT LEARNING",
@@ -842,6 +883,11 @@ const LANGS = {
     train_agent_first: "Zuerst einen Agenten trainieren",
     footer_about: "ÜBER DAS PROJEKT",
     footer_help: "BENUTZERHANDBUCH",
+    io_agents: "AGENTEN E/A:",
+    io_exp_json: "⬇ ALLE EXPORTIEREN (JSON)",
+    io_exp_csv: "⬇ STATISTIK EXPORTIEREN (CSV)",
+    io_imp_json: "⬆ JSON IMPORTIEREN",
+    io_imp_csv: "⬆ CSV IMPORTIEREN",
   },
   hr: {
     subtitle: "AI LABORATORIJ — REINFORCEMENT UČENJE IGROM SA SOBOM",
@@ -908,6 +954,11 @@ const LANGS = {
     train_agent_first: "Prvo treniraj agenta",
     footer_about: "O PROJEKTU",
     footer_help: "KORISNIČKI VODIČ",
+    io_agents: "AGENTI U/I:",
+    io_exp_json: "⬇ IZVEZI SVE (JSON)",
+    io_exp_csv: "⬇ IZVEZI STATISTIKE (CSV)",
+    io_imp_json: "⬆ UVEZI JSON",
+    io_imp_csv: "⬆ UVEZI CSV",
   },
   sr: {
     subtitle: "AI LABORATORIJA — REINFORCEMENT UCENJE IGROM SA SOBOM",
@@ -974,6 +1025,11 @@ const LANGS = {
     train_agent_first: "Prvo treniraj agenta",
     footer_about: "O PROJEKTU",
     footer_help: "VODIČ ZA KORISNIKE",
+    io_agents: "AGENTI U/I:",
+    io_exp_json: "⬇ IZVEZI SVE (JSON)",
+    io_exp_csv: "⬇ IZVEZI STATISTIKE (CSV)",
+    io_imp_json: "⬆ UVEZI JSON",
+    io_imp_csv: "⬆ UVEZI CSV",
   },
   "sr-cyrl": {
     subtitle: "АИ ЛАБОРАТОРИЈА — REINFORCEMENT УЧЕЊЕ ИГРОМ СА СОБОМ",
@@ -1040,6 +1096,11 @@ const LANGS = {
     train_agent_first: "Прво тренирај агента",
     footer_about: "О ПРОЈЕКТУ",
     footer_help: "ВОДИЧ ЗА КОРИСНИКЕ",
+    io_agents: "АГЕНТИ У/И:",
+    io_exp_json: "⬇ ИЗВЕЗИ СВЕ (JSON)",
+    io_exp_csv: "⬇ ИЗВЕЗИ СТАТИСТИКЕ (CSV)",
+    io_imp_json: "⬆ УВЕЗИ JSON",
+    io_imp_csv: "⬆ УВЕЗИ CSV",
   }
 };
 
@@ -1804,6 +1865,130 @@ document.addEventListener('keydown',e=>{
 document.addEventListener('keyup',e=>{ keys[e.key]=false; });
 
 // =====================================================================
+// EXPORT / IMPORT
+// =====================================================================
+
+function exportAllJSON() {
+  const data = {};
+  for (const k in agents) data[k] = agents[k].toJSON();
+  if (!Object.keys(data).length) { notify(t('no_agent_selected')); return; }
+  const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pong_agents_' + new Date().toISOString().slice(0,10) + '.json';
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('Exported ' + Object.keys(data).length + ' agents as JSON');
+}
+
+function exportAllCSV() {
+  if (!Object.keys(agents).length) { notify(t('no_agent_selected')); return; }
+  const header = 'name,episodes,wins,losses,win_rate,rating,lr,discount,epsilon,eps_decay,ball_speed,trained';
+  const rows = Object.values(agents).map(a => {
+    const wr = (a.wins+a.losses > 0) ? (a.wins/(a.wins+a.losses)*100).toFixed(2) : '0';
+    return [a.name, a.totalEpisodes, a.wins, a.losses, wr, Math.round(a.rating),
+            a.lr, a.discount, a.epsilon.toFixed(6), a.epsilonDecay, a.trainSpeed, a.trained?1:0].join(',');
+  });
+  const csv = [header, ...rows].join('\n');
+  const blob = new Blob([csv], {type:'text/csv'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = 'pong_stats_' + new Date().toISOString().slice(0,10) + '.csv';
+  a.click();
+  URL.revokeObjectURL(url);
+  notify('Exported ' + rows.length + ' agents as CSV');
+}
+
+let importMode = 'json';
+function triggerImport(mode) {
+  importMode = mode;
+  const fi = document.getElementById('file-input');
+  fi.accept = mode === 'json' ? '.json' : '.csv';
+  fi.value = '';
+  fi.click();
+}
+
+function handleImport(event) {
+  const file = event.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    try {
+      if (importMode === 'json') {
+        importJSON(e.target.result);
+      } else {
+        importCSV(e.target.result);
+      }
+    } catch(err) {
+      notify('Import error: ' + err.message);
+    }
+  };
+  reader.readAsText(file);
+}
+
+function importJSON(text) {
+  const data = JSON.parse(text);
+  let imported = 0, skipped = 0, replaced = 0;
+  for (const key in data) {
+    const agentData = data[key];
+    if (!agentData.name) continue;
+    const name = agentData.name.toUpperCase().replace(/[^A-Z0-9_-]/g,'');
+    if (agents[name]) {
+      // Conflict: ask
+      if (confirm('Agent "' + name + '" already exists. Replace?')) {
+        agents[name] = QLearningAgent.fromJSON(agentData);
+        replaced++;
+      } else {
+        skipped++;
+      }
+    } else {
+      agents[name] = QLearningAgent.fromJSON(agentData);
+      imported++;
+    }
+  }
+  saveAgents();
+  renderAgentList();
+  renderLeaderboard();
+  updateMatchSetup();
+  notify('JSON Import: ' + imported + ' new, ' + replaced + ' replaced, ' + skipped + ' skipped');
+}
+
+function importCSV(text) {
+  const lines = text.trim().split('\n');
+  if (lines.length < 2) { notify('Empty CSV'); return; }
+  const header = lines[0].split(',').map(h=>h.trim());
+  let imported = 0, skipped = 0;
+  for (let i = 1; i < lines.length; i++) {
+    const vals = lines[i].split(',').map(v=>v.trim());
+    const row = {};
+    header.forEach((h,idx) => row[h] = vals[idx]);
+    if (!row.name) continue;
+    const name = row.name.toUpperCase().replace(/[^A-Z0-9_-]/g,'');
+    if (agents[name] && !confirm('Agent "' + name + '" already exists. Replace params?')) {
+      skipped++; continue;
+    }
+    agents[name] = new QLearningAgent({
+      name,
+      lr: parseFloat(row.lr) || 0.1,
+      discount: parseFloat(row.discount) || 0.95,
+      epsilon: parseFloat(row.epsilon) || 0.1,
+      epsilonDecay: parseFloat(row.eps_decay) || 0.9995,
+      trainSpeed: parseFloat(row.ball_speed) || 5,
+    });
+    // CSV import ne prenosi Q-table — agent mora biti treniran
+    agents[name].trained = false;
+    imported++;
+  }
+  saveAgents();
+  renderAgentList();
+  renderLeaderboard();
+  updateMatchSetup();
+  notify('CSV Import: ' + imported + ' agents created (untrained). Train before playing.');
+}
+
+// =====================================================================
 // ACCESSIBILITY
 // =====================================================================
 function setFontSize(size) {
@@ -1862,7 +2047,7 @@ document.getElementById('status-mode').textContent='MODE: '+currentMode.toUpperC
 });
 </script>
 <div id="footer">
-  <span>PONG AI TRAINING LAB &nbsp;|&nbsp; <strong>v1.1</strong> &nbsp;|&nbsp; 2026 &nbsp;|&nbsp; fladroid</span>
+  <span>PONG AI TRAINING LAB &nbsp;|&nbsp; <strong>v1.3</strong> &nbsp;|&nbsp; 2026 &nbsp;|&nbsp; fladroid</span>
   &nbsp;&mdash;&nbsp;
   <a onclick="openModal('about-modal')" data-i18n="footer_about">ABOUT</a>
   &nbsp;|&nbsp;
@@ -1897,7 +2082,7 @@ document.getElementById('status-mode').textContent='MODE: '+currentMode.toUpperC
       <tr><td>Version control</td><td>Git / GitHub</td><td>2.43</td></tr>
     </table>
     <h3>VERSION</h3>
-    <p>v1.1 — March 2026</p>
+    <p>v1.3 — March 2026</p>
   </div>
 </div>
 
