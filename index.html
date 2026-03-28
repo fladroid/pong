@@ -181,16 +181,20 @@ header p.subtitle {
   align-items: center;
   margin-bottom: 8px;
   font-family: 'Orbitron', sans-serif;
+  background: rgba(0,255,65,0.03);
+  border: 1px solid var(--panel-border);
+  padding: 8px 20px;
 }
 .score-num {
-  font-size: 2.5rem;
+  font-size: 3rem;
   font-weight: 900;
   text-shadow: 0 0 20px var(--phosphor);
-  min-width: 60px;
+  min-width: 80px;
   text-align: center;
+  line-height: 1;
 }
-.score-sep { color: var(--phosphor-dim); font-size: 1.2rem; }
-.player-label { font-size: 0.6rem; color: var(--phosphor-dim); letter-spacing: 0.15em; text-align: center; }
+.score-sep { color: var(--phosphor-dim); font-size: 2rem; }
+.player-label { font-size: 0.6rem; color: var(--phosphor-dim); letter-spacing: 0.15em; text-align: center; margin-top: 4px; }
 
 /* Canvas wrapper */
 #canvas-wrap {
