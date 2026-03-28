@@ -1,0 +1,1689 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PONG — AI Training Lab</title>
+<style>
+@import url('https://fonts.googleapis.com/css2?family=Share+Tech+Mono&family=Orbitron:wght@400;700;900&display=swap');
+
+:root {
+  --phosphor: #00ff41;
+  --phosphor-dim: #00aa2a;
+  --phosphor-glow: #00ff4166;
+  --bg: #050a05;
+  --panel-bg: #070f07;
+  --panel-border: #00ff4133;
+  --amber: #ffb000;
+  --red: #ff3333;
+  --white: #e8ffe8;
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+
+body {
+  background: var(--bg);
+  color: var(--phosphor);
+  font-family: 'Share Tech Mono', monospace;
+  min-height: 100vh;
+  overflow-x: hidden;
+}
+
+/* CRT scanlines overlay */
+body::before {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: repeating-linear-gradient(
+    0deg,
+    transparent,
+    transparent 2px,
+    rgba(0,0,0,0.08) 2px,
+    rgba(0,0,0,0.08) 4px
+  );
+  pointer-events: none;
+  z-index: 9999;
+}
+
+/* CRT vignette */
+body::after {
+  content: '';
+  position: fixed;
+  top: 0; left: 0; right: 0; bottom: 0;
+  background: radial-gradient(ellipse at center, transparent 60%, rgba(0,0,0,0.7) 100%);
+  pointer-events: none;
+  z-index: 9998;
+}
+
+header {
+  text-align: center;
+  padding: 24px 16px 8px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+header h1 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: clamp(1.8rem, 5vw, 3rem);
+  font-weight: 900;
+  letter-spacing: 0.3em;
+  text-shadow: 0 0 20px var(--phosphor), 0 0 40px var(--phosphor-glow);
+  animation: flicker 8s infinite;
+}
+
+header p.subtitle {
+  font-size: 0.75rem;
+  color: var(--phosphor-dim);
+  letter-spacing: 0.2em;
+  margin-top: 6px;
+}
+
+@keyframes flicker {
+  0%,95%,100% { opacity: 1; }
+  96% { opacity: 0.85; }
+  97% { opacity: 1; }
+  98% { opacity: 0.9; }
+}
+
+/* Language selector */
+#lang-bar {
+  display: flex;
+  justify-content: center;
+  gap: 8px;
+  padding: 8px;
+  border-bottom: 1px solid var(--panel-border);
+  flex-wrap: wrap;
+}
+
+.lang-btn {
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--phosphor-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.7rem;
+  padding: 3px 10px;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  transition: all 0.2s;
+}
+.lang-btn:hover, .lang-btn.active {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+  text-shadow: 0 0 8px var(--phosphor);
+  box-shadow: 0 0 8px var(--phosphor-glow);
+}
+
+/* Main layout */
+#app {
+  display: grid;
+  grid-template-columns: 280px 1fr 280px;
+  gap: 12px;
+  padding: 12px;
+  max-width: 1400px;
+  margin: 0 auto;
+}
+
+@media (max-width: 900px) {
+  #app { grid-template-columns: 1fr; }
+}
+
+/* Panels */
+.panel {
+  background: var(--panel-bg);
+  border: 1px solid var(--panel-border);
+  padding: 14px;
+  position: relative;
+}
+.panel::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--phosphor), transparent);
+  opacity: 0.5;
+}
+.panel h2 {
+  font-family: 'Orbitron', sans-serif;
+  font-size: 0.7rem;
+  letter-spacing: 0.2em;
+  color: var(--phosphor-dim);
+  margin-bottom: 12px;
+  padding-bottom: 6px;
+  border-bottom: 1px solid var(--panel-border);
+}
+
+/* Agent list */
+.agent-item {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  border: 1px solid var(--panel-border);
+  cursor: pointer;
+  transition: all 0.15s;
+  font-size: 0.78rem;
+}
+.agent-item:hover { border-color: var(--phosphor); background: rgba(0,255,65,0.04); }
+.agent-item.selected { border-color: var(--phosphor); background: rgba(0,255,65,0.08); box-shadow: 0 0 8px var(--phosphor-glow); }
+.agent-badge {
+  font-size: 0.6rem;
+  padding: 2px 6px;
+  border: 1px solid;
+  letter-spacing: 0.1em;
+}
+.badge-trained { border-color: var(--phosphor); color: var(--phosphor); }
+.badge-new { border-color: var(--phosphor-dim); color: var(--phosphor-dim); }
+
+/* Score display */
+#score-display {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 8px;
+  font-family: 'Orbitron', sans-serif;
+}
+.score-num {
+  font-size: 2.5rem;
+  font-weight: 900;
+  text-shadow: 0 0 20px var(--phosphor);
+  min-width: 60px;
+  text-align: center;
+}
+.score-sep { color: var(--phosphor-dim); font-size: 1.2rem; }
+.player-label { font-size: 0.6rem; color: var(--phosphor-dim); letter-spacing: 0.15em; text-align: center; }
+
+/* Canvas wrapper */
+#canvas-wrap {
+  position: relative;
+  width: 100%;
+}
+#gameCanvas {
+  display: block;
+  width: 100%;
+  height: auto;
+  border: 1px solid var(--panel-border);
+  box-shadow: 0 0 30px var(--phosphor-glow), inset 0 0 60px rgba(0,0,0,0.5);
+  background: #000;
+}
+
+/* Status bar */
+#status-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 6px 10px;
+  background: rgba(0,255,65,0.03);
+  border: 1px solid var(--panel-border);
+  border-top: none;
+  font-size: 0.7rem;
+  color: var(--phosphor-dim);
+}
+#status-msg { color: var(--phosphor); }
+
+/* Game controls */
+#game-controls {
+  display: flex;
+  gap: 8px;
+  margin-top: 10px;
+  flex-wrap: wrap;
+}
+
+/* Buttons */
+.btn {
+  background: transparent;
+  border: 1px solid var(--phosphor-dim);
+  color: var(--phosphor);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.75rem;
+  padding: 7px 14px;
+  cursor: pointer;
+  letter-spacing: 0.1em;
+  transition: all 0.2s;
+  flex: 1;
+  min-width: 80px;
+  text-transform: uppercase;
+}
+.btn:hover:not(:disabled) {
+  border-color: var(--phosphor);
+  box-shadow: 0 0 12px var(--phosphor-glow);
+  background: rgba(0,255,65,0.05);
+}
+.btn:disabled { opacity: 0.3; cursor: not-allowed; }
+.btn-primary { border-color: var(--phosphor); box-shadow: 0 0 8px var(--phosphor-glow); }
+.btn-danger { border-color: var(--red); color: var(--red); }
+.btn-amber { border-color: var(--amber); color: var(--amber); }
+
+/* Training progress */
+#train-progress-wrap { margin-top: 10px; display: none; }
+.progress-bar-outer {
+  width: 100%;
+  height: 8px;
+  background: rgba(0,255,65,0.1);
+  border: 1px solid var(--panel-border);
+  margin-bottom: 4px;
+}
+.progress-bar-inner {
+  height: 100%;
+  background: var(--phosphor);
+  box-shadow: 0 0 6px var(--phosphor);
+  transition: width 0.1s;
+  width: 0%;
+}
+#train-stats { font-size: 0.68rem; color: var(--phosphor-dim); }
+
+/* Forms */
+.form-group { margin-bottom: 10px; }
+.form-group label {
+  display: block;
+  font-size: 0.65rem;
+  color: var(--phosphor-dim);
+  letter-spacing: 0.1em;
+  margin-bottom: 3px;
+}
+.form-group input[type=text],
+.form-group input[type=number],
+.form-group select {
+  width: 100%;
+  background: rgba(0,255,65,0.04);
+  border: 1px solid var(--panel-border);
+  color: var(--phosphor);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.8rem;
+  padding: 5px 8px;
+  outline: none;
+  transition: border-color 0.2s;
+}
+.form-group input:focus,
+.form-group select:focus { border-color: var(--phosphor); box-shadow: 0 0 6px var(--phosphor-glow); }
+.form-group select option { background: #050a05; }
+
+/* Agent stats table */
+.stats-table { width: 100%; font-size: 0.7rem; border-collapse: collapse; }
+.stats-table td { padding: 3px 6px; border-bottom: 1px solid var(--panel-border); }
+.stats-table td:first-child { color: var(--phosphor-dim); }
+.stats-table td:last-child { color: var(--phosphor); text-align: right; }
+
+/* Match result */
+#match-result {
+  display: none;
+  text-align: center;
+  padding: 20px;
+  position: absolute;
+  top: 50%; left: 50%;
+  transform: translate(-50%,-50%);
+  background: rgba(5,10,5,0.95);
+  border: 1px solid var(--phosphor);
+  box-shadow: 0 0 40px var(--phosphor-glow);
+  z-index: 10;
+  min-width: 200px;
+}
+#match-result h3 { font-family: 'Orbitron', sans-serif; font-size: 1.2rem; margin-bottom: 8px; }
+#match-result p { font-size: 0.75rem; color: var(--phosphor-dim); }
+
+/* Tabs */
+.tab-bar { display: flex; gap: 0; margin-bottom: 12px; }
+.tab-btn {
+  flex: 1;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  border-bottom: none;
+  color: var(--phosphor-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.65rem;
+  padding: 5px;
+  cursor: pointer;
+  letter-spacing: 0.08em;
+  transition: all 0.15s;
+}
+.tab-btn.active { color: var(--phosphor); background: rgba(0,255,65,0.06); border-color: var(--phosphor); }
+.tab-content { display: none; }
+.tab-content.active { display: block; }
+
+/* Mode selector */
+.mode-btn {
+  display: block;
+  width: 100%;
+  text-align: left;
+  background: transparent;
+  border: 1px solid var(--panel-border);
+  color: var(--phosphor-dim);
+  font-family: 'Share Tech Mono', monospace;
+  font-size: 0.72rem;
+  padding: 7px 10px;
+  cursor: pointer;
+  margin-bottom: 5px;
+  letter-spacing: 0.05em;
+  transition: all 0.15s;
+}
+.mode-btn:hover, .mode-btn.active {
+  border-color: var(--phosphor);
+  color: var(--phosphor);
+  background: rgba(0,255,65,0.06);
+}
+.mode-btn span { color: var(--phosphor-dim); font-size: 0.62rem; display: block; margin-top: 2px; }
+
+/* Leaderboard */
+.lb-row {
+  display: flex;
+  justify-content: space-between;
+  padding: 5px 6px;
+  font-size: 0.7rem;
+  border-bottom: 1px solid var(--panel-border);
+}
+.lb-row:hover { background: rgba(0,255,65,0.04); }
+.lb-rank { color: var(--phosphor-dim); min-width: 20px; }
+.lb-name { flex: 1; padding: 0 8px; }
+.lb-score { color: var(--amber); }
+
+/* Tooltip-like info */
+.info-chip {
+  display: inline-block;
+  font-size: 0.6rem;
+  color: var(--phosphor-dim);
+  border: 1px solid var(--panel-border);
+  padding: 1px 5px;
+  margin-left: 4px;
+  vertical-align: middle;
+}
+
+/* Notification */
+#notification {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  background: var(--panel-bg);
+  border: 1px solid var(--phosphor);
+  padding: 10px 16px;
+  font-size: 0.75rem;
+  box-shadow: 0 0 20px var(--phosphor-glow);
+  z-index: 10000;
+  display: none;
+  max-width: 300px;
+}
+
+</style>
+</head>
+<body>
+
+<div id="notification"></div>
+
+<header>
+  <h1>◀ PONG ▶</h1>
+  <p class="subtitle" data-i18n="subtitle">AI TRAINING LAB — SELF-PLAY REINFORCEMENT LEARNING</p>
+</header>
+
+<div id="lang-bar">
+  <button class="lang-btn active" onclick="setLang('en')">EN</button>
+  <button class="lang-btn" onclick="setLang('de')">DE</button>
+  <button class="lang-btn" onclick="setLang('hr')">HR</button>
+  <button class="lang-btn" onclick="setLang('sr')">SR</button>
+  <button class="lang-btn" onclick="setLang('sr-cyrl')">СР</button>
+</div>
+
+<div id="app">
+
+  <!-- LEFT PANEL: Agents -->
+  <div class="panel">
+    <h2 data-i18n="panel_agents">▸ AGENTS</h2>
+    <div id="agent-list"></div>
+    <button class="btn btn-primary" onclick="openCreateAgent()" style="width:100%; margin-top:8px" data-i18n="btn_new_agent">+ NEW AGENT</button>
+
+    <div id="create-agent-form" style="display:none; margin-top:12px; border-top:1px solid var(--panel-border); padding-top:12px;">
+      <div class="form-group">
+        <label data-i18n="lbl_agent_name">AGENT NAME</label>
+        <input type="text" id="new-agent-name" placeholder="AGENT_01" maxlength="20">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_episodes">TRAINING EPISODES <span class="info-chip">default: 5000</span></label>
+        <input type="number" id="new-episodes" value="5000" min="100" max="500000" step="100">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_lr">LEARNING RATE α <span class="info-chip">default: 0.1</span></label>
+        <input type="number" id="new-lr" value="0.1" min="0.001" max="1" step="0.001">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_discount">DISCOUNT γ <span class="info-chip">default: 0.95</span></label>
+        <input type="number" id="new-discount" value="0.95" min="0.5" max="0.999" step="0.001">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_epsilon">EPSILON ε <span class="info-chip">default: 0.1</span></label>
+        <input type="number" id="new-epsilon" value="0.1" min="0.01" max="1" step="0.01">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_eps_decay">ε DECAY <span class="info-chip">default: 0.9995</span></label>
+        <input type="number" id="new-eps-decay" value="0.9995" min="0.99" max="0.9999" step="0.0001">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_speed">BALL SPEED <span class="info-chip">default: 5</span></label>
+        <input type="number" id="new-speed" value="5" min="2" max="12" step="0.5">
+      </div>
+      <div style="display:flex; gap:6px; margin-top:8px;">
+        <button class="btn btn-primary" onclick="createAgent()" style="flex:2" data-i18n="btn_create">CREATE</button>
+        <button class="btn" onclick="closeCreateAgent()" style="flex:1" data-i18n="btn_cancel">CANCEL</button>
+      </div>
+    </div>
+
+    <div style="margin-top:14px;">
+      <div class="tab-bar">
+        <button class="tab-btn active" onclick="switchTab('tab-info','left')" data-i18n="tab_info">INFO</button>
+        <button class="tab-btn" onclick="switchTab('tab-stats','left')" data-i18n="tab_stats">STATS</button>
+      </div>
+      <div id="tab-info" class="tab-content active">
+        <table class="stats-table" id="agent-info-table">
+          <tr><td colspan="2" style="color:var(--phosphor-dim); font-size:0.65rem" data-i18n="select_agent_hint">Select an agent to view info</td></tr>
+        </table>
+      </div>
+      <div id="tab-stats" class="tab-content">
+        <div id="leaderboard"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- CENTER: Game -->
+  <div class="panel" style="padding:10px;">
+    <div id="score-display">
+      <div>
+        <div class="score-num" id="score-left">0</div>
+        <div class="player-label" id="label-left">LEFT</div>
+      </div>
+      <div class="score-sep">:</div>
+      <div>
+        <div class="score-num" id="score-right">0</div>
+        <div class="player-label" id="label-right">RIGHT</div>
+      </div>
+    </div>
+
+    <div id="canvas-wrap">
+      <canvas id="gameCanvas" width="800" height="500"></canvas>
+      <div id="match-result">
+        <h3 id="result-title">GAME OVER</h3>
+        <p id="result-sub"></p>
+        <p id="result-rating" style="color:var(--amber); margin-top:6px; font-size:0.8rem;"></p>
+      </div>
+    </div>
+
+    <div id="status-bar">
+      <span id="status-mode">MODE: —</span>
+      <span id="status-msg">READY</span>
+      <span id="status-fps">0 FPS</span>
+    </div>
+
+    <div id="game-controls">
+      <button class="btn btn-primary" id="btn-start" onclick="startMatch()" data-i18n="btn_start">START</button>
+      <button class="btn" id="btn-pause" onclick="pauseMatch()" disabled data-i18n="btn_pause">PAUSE</button>
+      <button class="btn btn-danger" id="btn-stop" onclick="stopMatch()" disabled data-i18n="btn_stop">STOP</button>
+      <button class="btn btn-amber" id="btn-train" onclick="startTraining()" data-i18n="btn_train">TRAIN</button>
+    </div>
+
+    <div id="train-progress-wrap">
+      <div class="progress-bar-outer"><div class="progress-bar-inner" id="train-bar"></div></div>
+      <div id="train-stats">—</div>
+    </div>
+
+    <!-- Match setup -->
+    <div style="margin-top:12px; border-top:1px solid var(--panel-border); padding-top:10px;">
+      <h2 data-i18n="section_match_setup">▸ MATCH SETUP</h2>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-top:8px;">
+        <div class="form-group">
+          <label data-i18n="lbl_left_player">LEFT PLAYER</label>
+          <select id="sel-left" onchange="updateMatchSetup()">
+            <option value="human" data-i18n="opt_human">HUMAN (W/S)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label data-i18n="lbl_right_player">RIGHT PLAYER</label>
+          <select id="sel-right" onchange="updateMatchSetup()">
+            <option value="human" data-i18n="opt_human">HUMAN (↑/↓)</option>
+          </select>
+        </div>
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_points_to_win">POINTS TO WIN <span class="info-chip">default: 7</span></label>
+        <input type="number" id="pts-to-win" value="7" min="1" max="21">
+      </div>
+      <div class="form-group">
+        <label data-i18n="lbl_speed_match">MATCH BALL SPEED <span class="info-chip">default: 5</span></label>
+        <input type="number" id="match-speed" value="5" min="2" max="12" step="0.5">
+      </div>
+    </div>
+  </div>
+
+  <!-- RIGHT PANEL: Mode & Leaderboard -->
+  <div class="panel">
+    <h2 data-i18n="panel_mode">▸ GAME MODE</h2>
+    <button class="mode-btn active" id="mode-hvsa" onclick="setMode('hvsa')" data-mode="hvsa">
+      <span data-i18n="mode_hvsa">HUMAN vs AGENT</span>
+      <span data-i18n="mode_hvsa_desc">Play against a trained AI agent</span>
+    </button>
+    <button class="mode-btn" id="mode-avsa" onclick="setMode('avsa')" data-mode="avsa">
+      <span data-i18n="mode_avsa">AGENT vs AGENT</span>
+      <span data-i18n="mode_avsa_desc">Watch two AI agents compete</span>
+    </button>
+    <button class="mode-btn" id="mode-hvsh" onclick="setMode('hvsh')" data-mode="hvsh">
+      <span data-i18n="mode_hvsh">HUMAN vs HUMAN</span>
+      <span data-i18n="mode_hvsh_desc">Two players on same keyboard</span>
+    </button>
+    <button class="mode-btn" id="mode-avself" onclick="setMode('avself')" data-mode="avself">
+      <span data-i18n="mode_avself">AGENT vs SELF</span>
+      <span data-i18n="mode_avself_desc">Agent plays against its own copy</span>
+    </button>
+
+    <h2 style="margin-top:16px;" data-i18n="panel_leaderboard">▸ LEADERBOARD</h2>
+    <div id="lb-display"></div>
+
+    <h2 style="margin-top:16px;" data-i18n="panel_training">▸ TRAINING LOG</h2>
+    <div id="train-log" style="font-size:0.65rem; color:var(--phosphor-dim); max-height:180px; overflow-y:auto;">
+      <div data-i18n="no_training_yet">No training sessions yet.</div>
+    </div>
+  </div>
+
+</div>
+
+<script>
+// =====================================================================
+// I18N
+// =====================================================================
+const LANGS = {
+  en: {
+    subtitle: "AI TRAINING LAB — SELF-PLAY REINFORCEMENT LEARNING",
+    panel_agents: "▸ AGENTS",
+    btn_new_agent: "+ NEW AGENT",
+    lbl_agent_name: "AGENT NAME",
+    lbl_episodes: "TRAINING EPISODES",
+    lbl_lr: "LEARNING RATE α",
+    lbl_discount: "DISCOUNT γ",
+    lbl_epsilon: "EPSILON ε",
+    lbl_eps_decay: "ε DECAY",
+    lbl_speed: "BALL SPEED",
+    btn_create: "CREATE",
+    btn_cancel: "CANCEL",
+    tab_info: "INFO",
+    tab_stats: "STATS",
+    select_agent_hint: "Select an agent to view info",
+    btn_start: "START",
+    btn_pause: "PAUSE",
+    btn_stop: "STOP",
+    btn_train: "TRAIN",
+    section_match_setup: "▸ MATCH SETUP",
+    lbl_left_player: "LEFT PLAYER",
+    lbl_right_player: "RIGHT PLAYER",
+    opt_human: "HUMAN",
+    lbl_points_to_win: "POINTS TO WIN",
+    lbl_speed_match: "MATCH BALL SPEED",
+    panel_mode: "▸ GAME MODE",
+    mode_hvsa: "HUMAN vs AGENT",
+    mode_hvsa_desc: "Play against a trained AI agent",
+    mode_avsa: "AGENT vs AGENT",
+    mode_avsa_desc: "Watch two AI agents compete",
+    mode_hvsh: "HUMAN vs HUMAN",
+    mode_hvsh_desc: "Two players on same keyboard",
+    mode_avself: "AGENT vs SELF",
+    mode_avself_desc: "Agent plays against its own copy",
+    panel_leaderboard: "▸ LEADERBOARD",
+    panel_training: "▸ TRAINING LOG",
+    no_training_yet: "No training sessions yet.",
+    status_ready: "READY",
+    status_training: "TRAINING...",
+    status_playing: "PLAYING",
+    status_paused: "PAUSED",
+    agent_trained: "TRAINED",
+    agent_new: "NEW",
+    win_msg: "WINS!",
+    episodes_done: "episodes done",
+    train_complete: "Training complete",
+    no_agent_selected: "Select an agent first",
+    need_trained: "Agent must be trained first",
+    rating_bonus: "Rating bonus",
+    rating_penalty: "Rating penalty (overtrained vs undertrained)",
+    lbl_wins: "WINS",
+    lbl_losses: "LOSSES",
+    lbl_wr: "WIN RATE",
+    lbl_episodes_trained: "EPISODES",
+    lbl_lr_info: "LEARNING RATE",
+    lbl_discount_info: "DISCOUNT γ",
+    lbl_eps_info: "EPSILON ε",
+    lbl_rating: "RATING",
+    btn_delete: "DELETE",
+    btn_reset_params: "RESET PARAMS",
+    confirm_delete: "Delete agent",
+    train_agent_first: "Train an agent first",
+  },
+  de: {
+    subtitle: "KI-TRAININGSLABOR — SELBSTSPIEL REINFORCEMENT LEARNING",
+    panel_agents: "▸ AGENTEN",
+    btn_new_agent: "+ NEUER AGENT",
+    lbl_agent_name: "AGENTENNAME",
+    lbl_episodes: "TRAININGSEPISODEN",
+    lbl_lr: "LERNRATE α",
+    lbl_discount: "ABZINSUNGSFAKTOR γ",
+    lbl_epsilon: "EPSILON ε",
+    lbl_eps_decay: "ε ABNAHME",
+    lbl_speed: "BALLGESCHWINDIGKEIT",
+    btn_create: "ERSTELLEN",
+    btn_cancel: "ABBRECHEN",
+    tab_info: "INFO",
+    tab_stats: "STATISTIK",
+    select_agent_hint: "Agenten auswählen",
+    btn_start: "START",
+    btn_pause: "PAUSE",
+    btn_stop: "STOPP",
+    btn_train: "TRAINIEREN",
+    section_match_setup: "▸ SPIELKONFIGURATION",
+    lbl_left_player: "LINKER SPIELER",
+    lbl_right_player: "RECHTER SPIELER",
+    opt_human: "MENSCH",
+    lbl_points_to_win: "SIEGPUNKTE",
+    lbl_speed_match: "BALLGESCHWINDIGKEIT",
+    panel_mode: "▸ SPIELMODUS",
+    mode_hvsa: "MENSCH vs AGENT",
+    mode_hvsa_desc: "Gegen eine KI spielen",
+    mode_avsa: "AGENT vs AGENT",
+    mode_avsa_desc: "Zwei KI-Agenten zusehen",
+    mode_hvsh: "MENSCH vs MENSCH",
+    mode_hvsh_desc: "Zwei Spieler, eine Tastatur",
+    mode_avself: "AGENT vs SICH SELBST",
+    mode_avself_desc: "Agent gegen seine eigene Kopie",
+    panel_leaderboard: "▸ RANGLISTE",
+    panel_training: "▸ TRAININGSPROTOKOLL",
+    no_training_yet: "Noch keine Trainingssitzungen.",
+    status_ready: "BEREIT",
+    status_training: "TRAINING...",
+    status_playing: "SPIEL LÄUFT",
+    status_paused: "PAUSIERT",
+    agent_trained: "TRAINIERT",
+    agent_new: "NEU",
+    win_msg: "GEWINNT!",
+    episodes_done: "Episoden abgeschlossen",
+    train_complete: "Training abgeschlossen",
+    no_agent_selected: "Zuerst Agenten auswählen",
+    need_trained: "Agent muss zuerst trainiert werden",
+    rating_bonus: "Bewertungsbonus",
+    rating_penalty: "Bewertungsabzug",
+    lbl_wins: "SIEGE",
+    lbl_losses: "NIEDERLAGEN",
+    lbl_wr: "SIEGRATE",
+    lbl_episodes_trained: "EPISODEN",
+    lbl_lr_info: "LERNRATE",
+    lbl_discount_info: "ABZINSUNG γ",
+    lbl_eps_info: "EPSILON ε",
+    lbl_rating: "BEWERTUNG",
+    btn_delete: "LÖSCHEN",
+    btn_reset_params: "PARAMETER ZURÜCKSETZEN",
+    confirm_delete: "Agenten löschen",
+    train_agent_first: "Zuerst einen Agenten trainieren",
+  },
+  hr: {
+    subtitle: "AI LABORATORIJ — REINFORCEMENT UČENJE IGROM SA SOBOM",
+    panel_agents: "▸ AGENTI",
+    btn_new_agent: "+ NOVI AGENT",
+    lbl_agent_name: "IME AGENTA",
+    lbl_episodes: "EPIZODE TRENINGA",
+    lbl_lr: "STOPA UČENJA α",
+    lbl_discount: "FAKTOR POPUSTA γ",
+    lbl_epsilon: "EPSILON ε",
+    lbl_eps_decay: "ε OPADANJE",
+    lbl_speed: "BRZINA LOPTICE",
+    btn_create: "KREIRAJ",
+    btn_cancel: "ODUSTANI",
+    tab_info: "INFO",
+    tab_stats: "STATISTIKA",
+    select_agent_hint: "Odaberite agenta za prikaz",
+    btn_start: "START",
+    btn_pause: "PAUZA",
+    btn_stop: "ZAUSTAVI",
+    btn_train: "TRENIRAJ",
+    section_match_setup: "▸ POSTAVLJANJE MEČA",
+    lbl_left_player: "LIJEVI IGRAČ",
+    lbl_right_player: "DESNI IGRAČ",
+    opt_human: "ČOVJEK",
+    lbl_points_to_win: "POENI ZA POBJEDU",
+    lbl_speed_match: "BRZINA LOPTICE U MEČ",
+    panel_mode: "▸ NAČIN IGRE",
+    mode_hvsa: "ČOVJEK vs AGENT",
+    mode_hvsa_desc: "Igrajte protiv AI agenta",
+    mode_avsa: "AGENT vs AGENT",
+    mode_avsa_desc: "Gledajte dva AI agenta",
+    mode_hvsh: "ČOVJEK vs ČOVJEK",
+    mode_hvsh_desc: "Dva igrača, jedna tipkovnica",
+    mode_avself: "AGENT vs SAM SEBI",
+    mode_avself_desc: "Agent igra protiv svoje kopije",
+    panel_leaderboard: "▸ LJESTVICA",
+    panel_training: "▸ DNEVNIK TRENINGA",
+    no_training_yet: "Još nema treninga.",
+    status_ready: "SPREMAN",
+    status_training: "TRENIRANJE...",
+    status_playing: "IGRA U TIJEKU",
+    status_paused: "PAUZIRANO",
+    agent_trained: "TRENIRAN",
+    agent_new: "NOV",
+    win_msg: "POBIJEDIO!",
+    episodes_done: "epizoda završeno",
+    train_complete: "Trening završen",
+    no_agent_selected: "Odaberite agenta prvo",
+    need_trained: "Agent mora biti treniran",
+    rating_bonus: "Bonus ocjene",
+    rating_penalty: "Kazna ocjene",
+    lbl_wins: "POBJEDE",
+    lbl_losses: "PORAZI",
+    lbl_wr: "OMJER POBJEDA",
+    lbl_episodes_trained: "EPIZODE",
+    lbl_lr_info: "STOPA UČENJA",
+    lbl_discount_info: "POPUST γ",
+    lbl_eps_info: "EPSILON ε",
+    lbl_rating: "OCJENA",
+    btn_delete: "OBRIŠI",
+    btn_reset_params: "RESETIRAJ PARAMETRE",
+    confirm_delete: "Obriši agenta",
+    train_agent_first: "Prvo treniraj agenta",
+  },
+  sr: {
+    subtitle: "AI LABORATORIJA — REINFORCEMENT UCENJE IGROM SA SOBOM",
+    panel_agents: "▸ AGENTI",
+    btn_new_agent: "+ NOVI AGENT",
+    lbl_agent_name: "IME AGENTA",
+    lbl_episodes: "EPIZODE TRENINGA",
+    lbl_lr: "STOPA UCENJA α",
+    lbl_discount: "FAKTOR POPUSTA γ",
+    lbl_epsilon: "EPSILON ε",
+    lbl_eps_decay: "ε OPADANJE",
+    lbl_speed: "BRZINA LOPTICE",
+    btn_create: "KREIRAJ",
+    btn_cancel: "ODUSTANI",
+    tab_info: "INFO",
+    tab_stats: "STATISTIKA",
+    select_agent_hint: "Izaberi agenta za prikaz",
+    btn_start: "START",
+    btn_pause: "PAUZA",
+    btn_stop: "ZAUSTAVI",
+    btn_train: "TRENIRAJ",
+    section_match_setup: "▸ PODESAVANJE MECA",
+    lbl_left_player: "LEVI IGRAC",
+    lbl_right_player: "DESNI IGRAC",
+    opt_human: "COVEK",
+    lbl_points_to_win: "POENI ZA POBEDU",
+    lbl_speed_match: "BRZINA LOPTICE U MECU",
+    panel_mode: "▸ NACIN IGRE",
+    mode_hvsa: "COVEK vs AGENT",
+    mode_hvsa_desc: "Igraj protiv AI agenta",
+    mode_avsa: "AGENT vs AGENT",
+    mode_avsa_desc: "Gledaj dva AI agenta",
+    mode_hvsh: "COVEK vs COVEK",
+    mode_hvsh_desc: "Dva igraca, jedna tastatura",
+    mode_avself: "AGENT vs SAM SEBI",
+    mode_avself_desc: "Agent igra protiv svoje kopije",
+    panel_leaderboard: "▸ RANG LISTA",
+    panel_training: "▸ DNEVNIK TRENINGA",
+    no_training_yet: "Jos nema treninga.",
+    status_ready: "SPREMAN",
+    status_training: "TRENIRANJE...",
+    status_playing: "IGRA U TOKU",
+    status_paused: "PAUZIRANO",
+    agent_trained: "TRENIRAN",
+    agent_new: "NOV",
+    win_msg: "POBEDIO!",
+    episodes_done: "epizoda zavrseno",
+    train_complete: "Trening zavrsen",
+    no_agent_selected: "Izaberi agenta prvo",
+    need_trained: "Agent mora biti treniran",
+    rating_bonus: "Bonus ocene",
+    rating_penalty: "Kazna ocene",
+    lbl_wins: "POBEDE",
+    lbl_losses: "PORAZI",
+    lbl_wr: "WIN RATE",
+    lbl_episodes_trained: "EPIZODE",
+    lbl_lr_info: "STOPA UCENJA",
+    lbl_discount_info: "POPUST γ",
+    lbl_eps_info: "EPSILON ε",
+    lbl_rating: "OCENA",
+    btn_delete: "OBRISI",
+    btn_reset_params: "RESETUJ PARAMETRE",
+    confirm_delete: "Obrisi agenta",
+    train_agent_first: "Prvo treniraj agenta",
+  },
+  "sr-cyrl": {
+    subtitle: "АИ ЛАБОРАТОРИЈА — REINFORCEMENT УЧЕЊЕ ИГРОМ СА СОБОМ",
+    panel_agents: "▸ АГЕНТИ",
+    btn_new_agent: "+ НОВИ АГЕНТ",
+    lbl_agent_name: "ИМЕ АГЕНТА",
+    lbl_episodes: "ЕПИЗОДЕ ТРЕНИНГА",
+    lbl_lr: "СТОПА УЧЕЊА α",
+    lbl_discount: "ФАКТОР ПОПУСТА γ",
+    lbl_epsilon: "EPSILON ε",
+    lbl_eps_decay: "ε ОПАДАЊЕ",
+    lbl_speed: "БРЗИНА ЛОПТИЦЕ",
+    btn_create: "КРЕИРАЈ",
+    btn_cancel: "ОДУСТАНИ",
+    tab_info: "ИНФО",
+    tab_stats: "СТАТИСТИКА",
+    select_agent_hint: "Изабери агента за приказ",
+    btn_start: "СТАРТ",
+    btn_pause: "ПАУЗА",
+    btn_stop: "ЗАУСТАВИ",
+    btn_train: "ТРЕНИРАЈ",
+    section_match_setup: "▸ ПОДЕШАВАЊЕ МЕЧА",
+    lbl_left_player: "ЛЕВИ ИГРАЧ",
+    lbl_right_player: "ДЕСНИ ИГРАЧ",
+    opt_human: "ЧОВЕК",
+    lbl_points_to_win: "ПОЕНИ ЗА ПОБЕДУ",
+    lbl_speed_match: "БРЗИНА ЛОПТИЦЕ У МЕЧУ",
+    panel_mode: "▸ НАЧИН ИГРЕ",
+    mode_hvsa: "ЧОВЕК vs АГЕНТ",
+    mode_hvsa_desc: "Играј против АИ агента",
+    mode_avsa: "АГЕНТ vs АГЕНТ",
+    mode_avsa_desc: "Гледај два АИ агента",
+    mode_hvsh: "ЧОВЕК vs ЧОВЕК",
+    mode_hvsh_desc: "Два играча, једна тастатура",
+    mode_avself: "АГЕНТ vs САМ СЕБИ",
+    mode_avself_desc: "Агент игра против своје копије",
+    panel_leaderboard: "▸ РАНГ ЛИСТА",
+    panel_training: "▸ ДНЕВНИК ТРЕНИНГА",
+    no_training_yet: "Још нема тренинга.",
+    status_ready: "СПРЕМАН",
+    status_training: "ТРЕНИРАЊЕ...",
+    status_playing: "ИГРА У ТОКУ",
+    status_paused: "ПАУЗИРАНО",
+    agent_trained: "ТРЕНОВАН",
+    agent_new: "НОВ",
+    win_msg: "ПОБЕДИО!",
+    episodes_done: "епизода завршено",
+    train_complete: "Тренинг завршен",
+    no_agent_selected: "Изабери агента прво",
+    need_trained: "Агент мора бити тренован",
+    rating_bonus: "Бонус оцене",
+    rating_penalty: "Казна оцене",
+    lbl_wins: "ПОБЕДЕ",
+    lbl_losses: "ПОРАЗИ",
+    lbl_wr: "WIN RATE",
+    lbl_episodes_trained: "ЕПИЗОДЕ",
+    lbl_lr_info: "СТОПА УЧЕЊА",
+    lbl_discount_info: "ПОПУСТ γ",
+    lbl_eps_info: "EPSILON ε",
+    lbl_rating: "ОЦЕНА",
+    btn_delete: "ОБРИШИ",
+    btn_reset_params: "РЕСЕТУЈ ПАРАМЕТРЕ",
+    confirm_delete: "Обриши агента",
+    train_agent_first: "Прво тренирај агента",
+  }
+};
+
+let currentLang = 'en';
+function t(key) { return LANGS[currentLang][key] || LANGS['en'][key] || key; }
+
+function setLang(lang) {
+  currentLang = lang;
+  document.querySelectorAll('.lang-btn').forEach(b => b.classList.remove('active'));
+  document.querySelector(`.lang-btn[onclick="setLang('${lang}')"]`).classList.add('active');
+  applyTranslations();
+  renderAgentList();
+  renderLeaderboard();
+  updateMatchSetup();
+}
+
+function applyTranslations() {
+  document.querySelectorAll('[data-i18n]').forEach(el => {
+    const key = el.getAttribute('data-i18n');
+    if (el.tagName === 'OPTION') el.textContent = t(key);
+    else el.textContent = t(key);
+  });
+}
+
+// =====================================================================
+// GAME CONSTANTS
+// =====================================================================
+const CW = 800, CH = 500;
+const PADDLE_W = 12, PADDLE_H = 80;
+const BALL_SIZE = 10;
+const PADDLE_SPEED = 5;
+
+// Q-Learning state bins
+const BALL_X_BINS = 10;
+const BALL_Y_BINS = 10;
+const BALL_DX_BINS = 3; // negative, zero-ish, positive
+const BALL_DY_BINS = 5;
+const PADDLE_Y_BINS = 8;
+const OPP_Y_BINS = 6;
+
+const STATE_SIZE = BALL_X_BINS * BALL_Y_BINS * BALL_DX_BINS * BALL_DY_BINS * PADDLE_Y_BINS * OPP_Y_BINS;
+const ACTIONS = 3; // 0=up, 1=stay, 2=down
+
+// =====================================================================
+// AGENT CLASS
+// =====================================================================
+class QLearningAgent {
+  constructor(params) {
+    this.name = params.name;
+    this.lr = params.lr || 0.1;
+    this.discount = params.discount || 0.95;
+    this.epsilon = params.epsilon || 0.1;
+    this.epsilonDecay = params.epsilonDecay || 0.9995;
+    this.epsilonMin = 0.01;
+    this.trainSpeed = params.trainSpeed || 5;
+    this.totalEpisodes = 0;
+    this.wins = 0;
+    this.losses = 0;
+    this.rating = 1000;
+    this.trainLog = [];
+    // Q-table as flat array
+    this.Q = new Float32Array(STATE_SIZE * ACTIONS).fill(0);
+    this.trained = false;
+  }
+
+  encodeState(bx, by, bdx, bdy, py, opy) {
+    const bxi = Math.min(BALL_X_BINS-1, Math.max(0, Math.floor(bx/CW * BALL_X_BINS)));
+    const byi = Math.min(BALL_Y_BINS-1, Math.max(0, Math.floor(by/CH * BALL_Y_BINS)));
+    const bdxi = bdx < -1 ? 0 : bdx > 1 ? 2 : 1;
+    const bspeed = Math.abs(bdy);
+    const bdyi = Math.min(BALL_DY_BINS-1, Math.max(0, Math.floor(bspeed / 3 * BALL_DY_BINS)));
+    const pyi = Math.min(PADDLE_Y_BINS-1, Math.max(0, Math.floor(py/CH * PADDLE_Y_BINS)));
+    const opyi = Math.min(OPP_Y_BINS-1, Math.max(0, Math.floor(opy/CH * OPP_Y_BINS)));
+    return ((bxi * BALL_Y_BINS + byi) * BALL_DX_BINS + bdxi) * BALL_DY_BINS * PADDLE_Y_BINS * OPP_Y_BINS +
+           bdyi * PADDLE_Y_BINS * OPP_Y_BINS + pyi * OPP_Y_BINS + opyi;
+  }
+
+  getAction(state, explore=true) {
+    if (explore && Math.random() < this.epsilon) {
+      return Math.floor(Math.random() * ACTIONS);
+    }
+    let best = 0, bestQ = this.Q[state*ACTIONS];
+    for (let a=1;a<ACTIONS;a++) {
+      const q = this.Q[state*ACTIONS+a];
+      if (q > bestQ) { bestQ = q; best = a; }
+    }
+    return best;
+  }
+
+  update(s, a, r, s2) {
+    const idx = s*ACTIONS+a;
+    let maxQ2 = this.Q[s2*ACTIONS];
+    for (let a2=1;a2<ACTIONS;a2++) if (this.Q[s2*ACTIONS+a2] > maxQ2) maxQ2 = this.Q[s2*ACTIONS+a2];
+    this.Q[idx] += this.lr * (r + this.discount * maxQ2 - this.Q[idx]);
+  }
+
+  decayEpsilon() {
+    this.epsilon = Math.max(this.epsilonMin, this.epsilon * this.epsilonDecay);
+  }
+
+  // Compute rating multiplier based on training amount
+  // More training = smaller bonus when winning
+  ratingFactor() {
+    if (this.totalEpisodes === 0) return 1.0;
+    const base = Math.log10(Math.max(10, this.totalEpisodes));
+    return Math.max(0.2, 1.5 - base * 0.15);
+  }
+
+  toJSON() {
+    return {
+      name: this.name, lr: this.lr, discount: this.discount,
+      epsilon: this.epsilon, epsilonDecay: this.epsilonDecay,
+      trainSpeed: this.trainSpeed, totalEpisodes: this.totalEpisodes,
+      wins: this.wins, losses: this.losses, rating: this.rating,
+      trainLog: this.trainLog, trained: this.trained,
+      Q: Array.from(this.Q)
+    };
+  }
+
+  static fromJSON(d) {
+    const a = new QLearningAgent(d);
+    a.totalEpisodes = d.totalEpisodes;
+    a.wins = d.wins; a.losses = d.losses; a.rating = d.rating;
+    a.trainLog = d.trainLog || []; a.trained = d.trained;
+    a.Q = new Float32Array(d.Q);
+    return a;
+  }
+}
+
+// =====================================================================
+// GAME SIMULATION (headless for training)
+// =====================================================================
+function simGame(agentLeft, agentRight, maxSteps=5000) {
+  let bx=CW/2, by=CH/2;
+  let angle = (Math.random()*0.8+0.1) * Math.PI * (Math.random()<0.5?1:-1);
+  const spd = Math.max(agentLeft.trainSpeed, agentRight ? agentRight.trainSpeed : agentLeft.trainSpeed);
+  let bdx = Math.cos(angle)*spd, bdy = Math.sin(angle)*spd;
+  let lpy = CH/2-PADDLE_H/2, rpy = CH/2-PADDLE_H/2;
+  let lscore=0, rscore=0;
+
+  for (let step=0; step<maxSteps; step++) {
+    // Left agent state & action
+    const lstate = agentLeft.encodeState(bx,by,bdx,bdy,lpy,rpy);
+    const lact = agentLeft.getAction(lstate);
+    // Right agent (or mirror)
+    const rightAgent = agentRight || agentLeft;
+    const rstate = rightAgent.encodeState(CW-bx, by, -bdx, bdy, rpy, lpy);
+    const ract = rightAgent.getAction(rstate);
+
+    // Move paddles
+    if (lact===0) lpy = Math.max(0, lpy-PADDLE_SPEED);
+    else if (lact===2) lpy = Math.min(CH-PADDLE_H, lpy+PADDLE_SPEED);
+    if (ract===0) rpy = Math.max(0, rpy-PADDLE_SPEED);
+    else if (ract===2) rpy = Math.min(CH-PADDLE_H, rpy+PADDLE_SPEED);
+
+    // Move ball
+    bx+=bdx; by+=bdy;
+    let lr=0, rr=0;
+
+    // Wall bounce
+    if (by<=0) { by=0; bdy=Math.abs(bdy); }
+    if (by>=CH-BALL_SIZE) { by=CH-BALL_SIZE; bdy=-Math.abs(bdy); }
+
+    // Left paddle collision
+    if (bx<=PADDLE_W+10 && bx>=0 && by+BALL_SIZE>=lpy && by<=lpy+PADDLE_H) {
+      bdx=Math.abs(bdx)*1.05;
+      const rel=((by+BALL_SIZE/2)-(lpy+PADDLE_H/2))/(PADDLE_H/2);
+      bdy=rel*spd*1.2;
+      bx=PADDLE_W+11;
+      lr=1;
+    }
+    // Right paddle collision
+    if (bx+BALL_SIZE>=CW-PADDLE_W-10 && bx<=CW && by+BALL_SIZE>=rpy && by<=rpy+PADDLE_H) {
+      bdx=-Math.abs(bdx)*1.05;
+      const rel=((by+BALL_SIZE/2)-(rpy+PADDLE_H/2))/(PADDLE_H/2);
+      bdy=rel*spd*1.2;
+      bx=CW-PADDLE_W-BALL_SIZE-11;
+      rr=1;
+    }
+
+    // Score
+    if (bx<0) {
+      rscore++; lr=-1; rr=1;
+      bx=CW/2; by=CH/2;
+      const a2 = (Math.random()*0.8+0.1)*Math.PI*(Math.random()<0.5?1:-1);
+      bdx=Math.cos(a2)*spd; bdy=Math.sin(a2)*spd;
+    }
+    if (bx>CW) {
+      lscore++; rr=-1; lr=1;
+      bx=CW/2; by=CH/2;
+      const a2 = (Math.random()*0.8+0.1)*Math.PI*(Math.random()<0.5?1:-1);
+      bdx=Math.cos(a2)*spd; bdy=Math.sin(a2)*spd;
+    }
+
+    // Learn
+    const lstate2 = agentLeft.encodeState(bx,by,bdx,bdy,lpy,rpy);
+    agentLeft.update(lstate,lact,lr,lstate2);
+    agentLeft.decayEpsilon();
+
+    if (agentRight) {
+      const rstate2 = agentRight.encodeState(CW-bx,by,-bdx,bdy,rpy,lpy);
+      agentRight.update(rstate,ract,rr,rstate2);
+      agentRight.decayEpsilon();
+    } else {
+      // self-play: use mirror state
+      const rstate2 = agentLeft.encodeState(CW-bx,by,-bdx,bdy,rpy,lpy);
+      agentLeft.update(rstate,ract,rr,rstate2);
+    }
+
+    if (lscore>=7 || rscore>=7) break;
+  }
+  return {lscore, rscore};
+}
+
+// =====================================================================
+// STATE
+// =====================================================================
+let agents = {};
+let selectedAgent = null;
+let currentMode = 'hvsa';
+let gameState = null; // live game
+let animFrame = null;
+let trainingRunning = false;
+let keys = {};
+let lastFpsTime = 0, frameCount = 0, displayFps = 0;
+
+// =====================================================================
+// PERSISTENCE
+// =====================================================================
+function saveAgents() {
+  const data = {};
+  for (const k in agents) data[k] = agents[k].toJSON();
+  localStorage.setItem('pong_agents', JSON.stringify(data));
+}
+
+function loadAgents() {
+  const raw = localStorage.getItem('pong_agents');
+  if (!raw) return;
+  const data = JSON.parse(raw);
+  for (const k in data) agents[k] = QLearningAgent.fromJSON(data[k]);
+}
+
+// =====================================================================
+// AGENT UI
+// =====================================================================
+function renderAgentList() {
+  const el = document.getElementById('agent-list');
+  el.innerHTML = '';
+  const keys = Object.keys(agents);
+  if (!keys.length) {
+    el.innerHTML = `<div style="color:var(--phosphor-dim);font-size:0.7rem;padding:6px">${t('no_training_yet')}</div>`;
+    return;
+  }
+  keys.forEach(name => {
+    const a = agents[name];
+    const div = document.createElement('div');
+    div.className = 'agent-item' + (selectedAgent===name?' selected':'');
+    div.onclick = () => selectAgent(name);
+    div.innerHTML = `<span>${name}</span>
+      <span class="agent-badge ${a.trained?'badge-trained':'badge-new'}">${a.trained?t('agent_trained'):t('agent_new')}</span>`;
+    el.appendChild(div);
+  });
+}
+
+function selectAgent(name) {
+  selectedAgent = name;
+  renderAgentList();
+  renderAgentInfo();
+  updateMatchSetup();
+}
+
+function renderAgentInfo() {
+  if (!selectedAgent || !agents[selectedAgent]) {
+    document.getElementById('agent-info-table').innerHTML =
+      `<tr><td colspan="2" style="color:var(--phosphor-dim);font-size:0.65rem">${t('select_agent_hint')}</td></tr>`;
+    return;
+  }
+  const a = agents[selectedAgent];
+  const wr = a.wins+a.losses > 0 ? ((a.wins/(a.wins+a.losses))*100).toFixed(1)+'%' : '—';
+  document.getElementById('agent-info-table').innerHTML = `
+    <tr><td>${t('lbl_episodes_trained')}</td><td>${a.totalEpisodes.toLocaleString()}</td></tr>
+    <tr><td>${t('lbl_wins')}</td><td>${a.wins}</td></tr>
+    <tr><td>${t('lbl_losses')}</td><td>${a.losses}</td></tr>
+    <tr><td>${t('lbl_wr')}</td><td>${wr}</td></tr>
+    <tr><td>${t('lbl_rating')}</td><td>${Math.round(a.rating)}</td></tr>
+    <tr><td>${t('lbl_lr_info')}</td><td>${a.lr}</td></tr>
+    <tr><td>${t('lbl_discount_info')}</td><td>${a.discount}</td></tr>
+    <tr><td>${t('lbl_eps_info')}</td><td>${a.epsilon.toFixed(4)}</td></tr>
+    <tr><td colspan="2" style="padding-top:8px;">
+      <button class="btn btn-amber" style="width:100%;margin-bottom:4px" onclick="resetAgentParams('${selectedAgent}')">${t('btn_reset_params')}</button>
+      <button class="btn btn-danger" style="width:100%" onclick="deleteAgent('${selectedAgent}')">${t('btn_delete')}</button>
+    </td></tr>`;
+}
+
+function renderLeaderboard() {
+  const sorted = Object.values(agents).sort((a,b)=>b.rating-a.rating);
+  const el = document.getElementById('lb-display');
+  const el2 = document.getElementById('leaderboard');
+  const html = sorted.length ? sorted.slice(0,8).map((a,i)=>`
+    <div class="lb-row">
+      <span class="lb-rank">${i+1}</span>
+      <span class="lb-name">${a.name}</span>
+      <span class="lb-score">${Math.round(a.rating)}</span>
+    </div>`).join('') : `<div style="color:var(--phosphor-dim);font-size:0.7rem;padding:6px">${t('no_training_yet')}</div>`;
+  if(el) el.innerHTML = html;
+  if(el2) el2.innerHTML = html;
+}
+
+function openCreateAgent() {
+  document.getElementById('create-agent-form').style.display='block';
+  document.getElementById('new-agent-name').value = 'AGENT_' + String(Object.keys(agents).length+1).padStart(2,'0');
+}
+function closeCreateAgent() { document.getElementById('create-agent-form').style.display='none'; }
+
+function createAgent() {
+  const name = document.getElementById('new-agent-name').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'') || 'AGENT';
+  if (agents[name]) { notify('Agent "'+name+'" already exists'); return; }
+  agents[name] = new QLearningAgent({
+    name,
+    lr: parseFloat(document.getElementById('new-lr').value) || 0.1,
+    discount: parseFloat(document.getElementById('new-discount').value) || 0.95,
+    epsilon: parseFloat(document.getElementById('new-epsilon').value) || 0.1,
+    epsilonDecay: parseFloat(document.getElementById('new-eps-decay').value) || 0.9995,
+    trainSpeed: parseFloat(document.getElementById('new-speed').value) || 5,
+  });
+  saveAgents();
+  closeCreateAgent();
+  selectAgent(name);
+  renderAgentList();
+  updateMatchSetup();
+}
+
+function deleteAgent(name) {
+  if (!confirm(t('confirm_delete') + ' "' + name + '"?')) return;
+  delete agents[name];
+  if (selectedAgent===name) selectedAgent=null;
+  saveAgents();
+  renderAgentList();
+  renderAgentInfo();
+  updateMatchSetup();
+  renderLeaderboard();
+}
+
+function resetAgentParams(name) {
+  const a = agents[name];
+  a.lr=0.1; a.discount=0.95; a.epsilon=0.1; a.epsilonDecay=0.9995; a.trainSpeed=5;
+  saveAgents();
+  renderAgentInfo();
+}
+
+// =====================================================================
+// TRAINING
+// =====================================================================
+function startTraining() {
+  if (!selectedAgent) { notify(t('no_agent_selected')); return; }
+  if (trainingRunning) return;
+  const agent = agents[selectedAgent];
+  const episodes = parseInt(document.getElementById('new-episodes').value) || 5000;
+
+  trainingRunning = true;
+  document.getElementById('train-progress-wrap').style.display='block';
+  document.getElementById('btn-train').disabled=true;
+  setStatus(t('status_training'));
+
+  const BATCH = 50; // episodes per tick to keep UI responsive
+  let done = 0;
+  let winCount = 0;
+
+  function tick() {
+    if (!trainingRunning) { finishTraining(agent, done, winCount, episodes); return; }
+    const batchSize = Math.min(BATCH, episodes-done);
+    for (let i=0;i<batchSize;i++) {
+      const res = simGame(agent, null, 3000);
+      if (res.lscore > res.rscore) winCount++;
+    }
+    done += batchSize;
+    const pct = done/episodes*100;
+    document.getElementById('train-bar').style.width=pct+'%';
+    document.getElementById('train-stats').textContent =
+      `${done.toLocaleString()} / ${episodes.toLocaleString()} ${t('episodes_done')} — win rate: ${(winCount/done*100).toFixed(1)}%`;
+
+    if (done>=episodes) {
+      finishTraining(agent, done, winCount, episodes);
+    } else {
+      requestAnimationFrame(tick);
+    }
+  }
+  requestAnimationFrame(tick);
+}
+
+function finishTraining(agent, done, winCount, total) {
+  trainingRunning = false;
+  agent.totalEpisodes += done;
+  agent.trained = true;
+  const wr = (winCount/done*100).toFixed(1);
+  const logEntry = `${new Date().toLocaleTimeString()} — ${agent.name}: +${done} ep, WR ${wr}%`;
+  agent.trainLog.push(logEntry);
+
+  const logEl = document.getElementById('train-log');
+  logEl.innerHTML = agent.trainLog.slice(-20).reverse().map(l=>`<div>${l}</div>`).join('');
+
+  saveAgents();
+  renderAgentList();
+  renderAgentInfo();
+  renderLeaderboard();
+  document.getElementById('btn-train').disabled=false;
+  document.getElementById('train-progress-wrap').style.display='none';
+  setStatus(t('status_ready'));
+  notify(t('train_complete') + ` — ${agent.name}: ${done.toLocaleString()} ep, WR ${wr}%`);
+}
+
+// =====================================================================
+// MATCH SETUP
+// =====================================================================
+function setMode(mode) {
+  currentMode = mode;
+  document.querySelectorAll('.mode-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById('mode-'+mode).classList.add('active');
+  updateMatchSetup();
+}
+
+function updateMatchSetup() {
+  const lSel = document.getElementById('sel-left');
+  const rSel = document.getElementById('sel-right');
+  const agentNames = Object.keys(agents).filter(n=>agents[n].trained);
+
+  function buildOptions(sel, includeHuman, humanLabel, humanKeys) {
+    const cur = sel.value;
+    sel.innerHTML = '';
+    if (includeHuman) {
+      const opt = document.createElement('option');
+      opt.value='human'; opt.textContent=`${t('opt_human')} ${humanKeys}`;
+      sel.appendChild(opt);
+    }
+    agentNames.forEach(n=>{
+      const opt=document.createElement('option');
+      opt.value=n; opt.textContent=n;
+      sel.appendChild(opt);
+    });
+    if ([...sel.options].some(o=>o.value===cur)) sel.value=cur;
+  }
+
+  if (currentMode==='hvsa') {
+    buildOptions(lSel, true, '', '(W/S)');
+    buildOptions(rSel, false, '', '');
+    if (!agentNames.length) {
+      const opt=document.createElement('option');
+      opt.value=''; opt.textContent=t('train_agent_first');
+      rSel.appendChild(opt);
+    }
+  } else if (currentMode==='avsa') {
+    buildOptions(lSel, false, '', '');
+    buildOptions(rSel, false, '', '');
+    if (!agentNames.length) {
+      ['sel-left','sel-right'].forEach(id=>{
+        const opt=document.createElement('option');
+        opt.value=''; opt.textContent=t('train_agent_first');
+        document.getElementById(id).appendChild(opt);
+      });
+    }
+  } else if (currentMode==='hvsh') {
+    lSel.innerHTML=`<option value="human">${t('opt_human')} (W/S)</option>`;
+    rSel.innerHTML=`<option value="human">${t('opt_human')} (↑/↓)</option>`;
+  } else if (currentMode==='avself') {
+    buildOptions(lSel, false, '', '');
+    rSel.innerHTML=`<option value="self">— SELF —</option>`;
+  }
+
+  const lbl = document.getElementById('label-left');
+  const lbr = document.getElementById('label-right');
+  lbl.textContent = lSel.value==='human' ? t('opt_human')+' (W/S)' : lSel.value;
+  lbr.textContent = rSel.value==='human' ? t('opt_human')+' (↑/↓)' : rSel.value==='self' ? 'SELF' : rSel.value;
+}
+
+// =====================================================================
+// LIVE GAME
+// =====================================================================
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
+
+function initGameState() {
+  const speed = parseFloat(document.getElementById('match-speed').value) || 5;
+  const angle = (Math.random()*0.8+0.1)*Math.PI*(Math.random()<0.5?1:-1);
+  return {
+    bx:CW/2, by:CH/2,
+    bdx:Math.cos(angle)*speed, bdy:Math.sin(angle)*speed,
+    lpy:CH/2-PADDLE_H/2, rpy:CH/2-PADDLE_H/2,
+    lscore:0, rscore:0,
+    speed,
+    paused:false, running:true,
+    leftType: document.getElementById('sel-left').value,
+    rightType: document.getElementById('sel-right').value,
+    ptsToWin: parseInt(document.getElementById('pts-to-win').value)||7,
+  };
+}
+
+function startMatch() {
+  if (trainingRunning) return;
+  const lv = document.getElementById('sel-left').value;
+  const rv = document.getElementById('sel-right').value;
+
+  if (currentMode==='hvsa' && (!rv || !agents[rv] || !agents[rv].trained)) {
+    notify(t('need_trained')); return;
+  }
+  if (currentMode==='avsa') {
+    if (!lv || !agents[lv] || !agents[lv].trained) { notify(t('need_trained')); return; }
+    if (!rv || !agents[rv] || !agents[rv].trained) { notify(t('need_trained')); return; }
+  }
+  if (currentMode==='avself') {
+    if (!lv || !agents[lv] || !agents[lv].trained) { notify(t('need_trained')); return; }
+  }
+
+  stopMatch();
+  gameState = initGameState();
+  document.getElementById('score-left').textContent='0';
+  document.getElementById('score-right').textContent='0';
+  document.getElementById('match-result').style.display='none';
+  document.getElementById('btn-pause').disabled=false;
+  document.getElementById('btn-stop').disabled=false;
+  document.getElementById('btn-start').disabled=true;
+  setStatus(t('status_playing'));
+  updateMatchSetup();
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+function pauseMatch() {
+  if (!gameState) return;
+  gameState.paused = !gameState.paused;
+  document.getElementById('btn-pause').textContent = gameState.paused ? '▶ RESUME' : t('btn_pause');
+  if (!gameState.paused) animFrame = requestAnimationFrame(gameLoop);
+  setStatus(gameState.paused ? t('status_paused') : t('status_playing'));
+}
+
+function stopMatch() {
+  if (animFrame) { cancelAnimationFrame(animFrame); animFrame=null; }
+  if (gameState) gameState.running=false;
+  gameState=null;
+  document.getElementById('btn-pause').disabled=true;
+  document.getElementById('btn-stop').disabled=true;
+  document.getElementById('btn-start').disabled=false;
+  document.getElementById('btn-pause').textContent=t('btn_pause');
+  drawIdle();
+  setStatus(t('status_ready'));
+}
+
+let lastTime=0;
+function gameLoop(ts) {
+  if (!gameState || !gameState.running) return;
+  if (gameState.paused) return;
+
+  // FPS
+  frameCount++;
+  if (ts-lastFpsTime>500) {
+    displayFps = Math.round(frameCount/((ts-lastFpsTime)/1000));
+    frameCount=0; lastFpsTime=ts;
+    document.getElementById('status-fps').textContent=displayFps+' FPS';
+  }
+
+  const g = gameState;
+
+  // Move paddles
+  const lAgent = g.leftType!=='human' ? agents[g.leftType] : null;
+  const rAgent = g.rightType!=='human' && g.rightType!=='self' ? agents[g.rightType] :
+                 g.rightType==='self' ? agents[g.leftType] : null;
+
+  if (lAgent) {
+    const s = lAgent.encodeState(g.bx,g.by,g.bdx,g.bdy,g.lpy,g.rpy);
+    const act = lAgent.getAction(s, false);
+    if (act===0) g.lpy=Math.max(0,g.lpy-PADDLE_SPEED);
+    else if (act===2) g.lpy=Math.min(CH-PADDLE_H,g.lpy+PADDLE_SPEED);
+  } else {
+    if (keys['w']||keys['W']) g.lpy=Math.max(0,g.lpy-PADDLE_SPEED);
+    if (keys['s']||keys['S']) g.lpy=Math.min(CH-PADDLE_H,g.lpy+PADDLE_SPEED);
+  }
+
+  if (rAgent) {
+    const s = rAgent.encodeState(CW-g.bx,g.by,-g.bdx,g.bdy,g.rpy,g.lpy);
+    const act = rAgent.getAction(s, false);
+    if (act===0) g.rpy=Math.max(0,g.rpy-PADDLE_SPEED);
+    else if (act===2) g.rpy=Math.min(CH-PADDLE_H,g.rpy+PADDLE_SPEED);
+  } else if (g.rightType==='human') {
+    if (keys['ArrowUp']) g.rpy=Math.max(0,g.rpy-PADDLE_SPEED);
+    if (keys['ArrowDown']) g.rpy=Math.min(CH-PADDLE_H,g.rpy+PADDLE_SPEED);
+  }
+
+  // Move ball
+  g.bx+=g.bdx; g.by+=g.bdy;
+
+  // Wall
+  if (g.by<=0){g.by=0;g.bdy=Math.abs(g.bdy);}
+  if (g.by>=CH-BALL_SIZE){g.by=CH-BALL_SIZE;g.bdy=-Math.abs(g.bdy);}
+
+  // Left paddle
+  if (g.bx<=PADDLE_W+10&&g.bx>=0&&g.by+BALL_SIZE>=g.lpy&&g.by<=g.lpy+PADDLE_H){
+    g.bdx=Math.abs(g.bdx)*1.02;
+    const rel=((g.by+BALL_SIZE/2)-(g.lpy+PADDLE_H/2))/(PADDLE_H/2);
+    g.bdy=rel*g.speed*1.2;
+    g.bx=PADDLE_W+11;
+  }
+  // Right paddle
+  if (g.bx+BALL_SIZE>=CW-PADDLE_W-10&&g.bx<=CW&&g.by+BALL_SIZE>=g.rpy&&g.by<=g.rpy+PADDLE_H){
+    g.bdx=-Math.abs(g.bdx)*1.02;
+    const rel=((g.by+BALL_SIZE/2)-(g.rpy+PADDLE_H/2))/(PADDLE_H/2);
+    g.bdy=rel*g.speed*1.2;
+    g.bx=CW-PADDLE_W-BALL_SIZE-11;
+  }
+
+  // Speed cap
+  const totalSpeed = Math.sqrt(g.bdx*g.bdx+g.bdy*g.bdy);
+  if (totalSpeed>g.speed*2.5){const f=g.speed*2.5/totalSpeed;g.bdx*=f;g.bdy*=f;}
+
+  // Score
+  let scored = false;
+  if (g.bx<0){
+    g.rscore++;
+    scored=true;
+    document.getElementById('score-right').textContent=g.rscore;
+    updateRatings(g.rightType, g.leftType);
+  }
+  if (g.bx>CW){
+    g.lscore++;
+    scored=true;
+    document.getElementById('score-left').textContent=g.lscore;
+    updateRatings(g.leftType, g.rightType);
+  }
+
+  if (scored) {
+    if (g.lscore>=g.ptsToWin || g.rscore>=g.ptsToWin) {
+      drawFrame(g);
+      endMatch(g);
+      return;
+    }
+    g.bx=CW/2; g.by=CH/2;
+    const a2=(Math.random()*0.8+0.1)*Math.PI*(Math.random()<0.5?1:-1);
+    g.bdx=Math.cos(a2)*g.speed; g.bdy=Math.sin(a2)*g.speed;
+  }
+
+  drawFrame(g);
+  animFrame = requestAnimationFrame(gameLoop);
+}
+
+function updateRatings(winnerKey, loserKey) {
+  if (winnerKey==='human'||winnerKey==='self'||!agents[winnerKey]) return;
+  if (loserKey==='human'||loserKey==='self') {
+    // vs human: flat change
+    agents[winnerKey].rating += 5;
+    agents[winnerKey].wins++;
+    saveAgents(); renderLeaderboard(); renderAgentInfo(); return;
+  }
+  if (!agents[loserKey]) return;
+  const wFactor = agents[winnerKey].ratingFactor();
+  const lFactor = agents[loserKey].ratingFactor();
+  const change = Math.round(20 * wFactor);
+  agents[winnerKey].rating += change;
+  agents[loserKey].rating = Math.max(0, agents[loserKey].rating - change);
+  agents[winnerKey].wins++;
+  agents[loserKey].losses++;
+  saveAgents(); renderLeaderboard(); renderAgentInfo();
+}
+
+function endMatch(g) {
+  const lWon = g.lscore>=g.ptsToWin;
+  const winner = lWon ? (g.leftType==='human'?t('opt_human')+' (L)':g.leftType)
+                      : (g.rightType==='human'?t('opt_human')+' (R)':g.rightType==='self'?'SELF':g.rightType);
+  document.getElementById('result-title').textContent = winner + ' ' + t('win_msg');
+  document.getElementById('result-sub').textContent = `${g.lscore} : ${g.rscore}`;
+
+  const winKey = lWon ? g.leftType : g.rightType;
+  let ratingNote = '';
+  if (agents[winKey]) {
+    const f = agents[winKey].ratingFactor();
+    ratingNote = `${t('rating_bonus')}: ×${f.toFixed(2)}`;
+  }
+  document.getElementById('result-rating').textContent = ratingNote;
+  document.getElementById('match-result').style.display='block';
+
+  document.getElementById('btn-pause').disabled=true;
+  document.getElementById('btn-stop').disabled=true;
+  document.getElementById('btn-start').disabled=false;
+  gameState=null;
+  setStatus(t('status_ready'));
+}
+
+// =====================================================================
+// DRAWING
+// =====================================================================
+function drawFrame(g) {
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,CW,CH);
+
+  // Center line
+  ctx.setLineDash([10,10]);
+  ctx.strokeStyle='#00ff4122';
+  ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(CW/2,0); ctx.lineTo(CW/2,CH); ctx.stroke();
+  ctx.setLineDash([]);
+
+  // Paddles
+  const grd1=ctx.createLinearGradient(0,g.lpy,PADDLE_W,g.lpy+PADDLE_H);
+  grd1.addColorStop(0,'#00ff41'); grd1.addColorStop(1,'#00aa2a');
+  ctx.fillStyle=grd1;
+  ctx.shadowColor='#00ff41'; ctx.shadowBlur=15;
+  ctx.fillRect(10,g.lpy,PADDLE_W,PADDLE_H);
+
+  const grd2=ctx.createLinearGradient(CW-PADDLE_W-10,g.rpy,CW-10,g.rpy+PADDLE_H);
+  grd2.addColorStop(0,'#00ff41'); grd2.addColorStop(1,'#00aa2a');
+  ctx.fillStyle=grd2;
+  ctx.fillRect(CW-PADDLE_W-10,g.rpy,PADDLE_W,PADDLE_H);
+
+  // Ball
+  ctx.fillStyle='#00ff41';
+  ctx.shadowColor='#00ff41'; ctx.shadowBlur=20;
+  ctx.fillRect(g.bx,g.by,BALL_SIZE,BALL_SIZE);
+  ctx.shadowBlur=0;
+}
+
+function drawIdle() {
+  ctx.fillStyle='#000';
+  ctx.fillRect(0,0,CW,CH);
+  ctx.setLineDash([10,10]);
+  ctx.strokeStyle='#00ff4122';
+  ctx.lineWidth=2;
+  ctx.beginPath(); ctx.moveTo(CW/2,0); ctx.lineTo(CW/2,CH); ctx.stroke();
+  ctx.setLineDash([]);
+  ctx.fillStyle='#00ff4133';
+  ctx.fillRect(10,CH/2-PADDLE_H/2,PADDLE_W,PADDLE_H);
+  ctx.fillRect(CW-PADDLE_W-10,CH/2-PADDLE_H/2,PADDLE_W,PADDLE_H);
+  ctx.fillStyle='#00ff4155';
+  ctx.fillRect(CW/2-BALL_SIZE/2,CH/2-BALL_SIZE/2,BALL_SIZE,BALL_SIZE);
+}
+
+// =====================================================================
+// UI HELPERS
+// =====================================================================
+function setStatus(msg) { document.getElementById('status-msg').textContent=msg; }
+
+function notify(msg, duration=3500) {
+  const el=document.getElementById('notification');
+  el.textContent=msg; el.style.display='block';
+  setTimeout(()=>el.style.display='none',duration);
+}
+
+function switchTab(tabId, side) {
+  const tabs = document.querySelectorAll(`#${tabId}`);
+  // find parent and toggle
+  const parent = document.getElementById(tabId).parentElement;
+  parent.querySelectorAll('.tab-content').forEach(t=>t.classList.remove('active'));
+  parent.querySelectorAll('.tab-btn').forEach(b=>b.classList.remove('active'));
+  document.getElementById(tabId).classList.add('active');
+  event.target.classList.add('active');
+  if (tabId==='tab-stats') renderLeaderboard();
+  if (tabId==='tab-info') renderAgentInfo();
+}
+
+// =====================================================================
+// KEYBOARD
+// =====================================================================
+document.addEventListener('keydown',e=>{
+  keys[e.key]=true;
+  if(['ArrowUp','ArrowDown','Space'].includes(e.key))e.preventDefault();
+});
+document.addEventListener('keyup',e=>{ keys[e.key]=false; });
+
+// =====================================================================
+// INIT
+// =====================================================================
+loadAgents();
+applyTranslations();
+renderAgentList();
+renderLeaderboard();
+updateMatchSetup();
+drawIdle();
+setStatus(t('status_ready'));
+document.getElementById('status-mode').textContent='MODE: '+currentMode.toUpperCase();
+
+// Update mode label on change
+['hvsa','avsa','hvsh','avself'].forEach(m=>{
+  document.getElementById('mode-'+m).addEventListener('click',()=>{
+    document.getElementById('status-mode').textContent='MODE: '+m.toUpperCase();
+  });
+});
+</script>
+</body>
+</html>
