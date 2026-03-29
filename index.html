@@ -598,31 +598,30 @@ function simGame(agentLeft, agentRight, maxSteps=5000) {
   let bdx = Math.cos(angle)*spd, bdy = Math.sin(angle)*spd;
   let lpy = CH/2-PADDLE_H/2, rpy = CH/2-PADDLE_H/2;
   let lscore=0, rscore=0;
+  const rightAgent = agentRight || agentLeft;
 
   for (let step=0; step<maxSteps; step++) {
-    // Left agent state & action
+    // Stanja i akcije
     const lstate = agentLeft.encodeState(bx,by,bdx,bdy,lpy,rpy);
-    const lact = agentLeft.getAction(lstate);
-    // Right agent (or mirror)
-    const rightAgent = agentRight || agentLeft;
+    const lact   = agentLeft.getAction(lstate);
     const rstate = rightAgent.encodeState(CW-bx, by, -bdx, bdy, rpy, lpy);
-    const ract = rightAgent.getAction(rstate);
+    const ract   = rightAgent.getAction(rstate);
 
-    // Move paddles
+    // Pomjeranje paddlea
     if (lact===0) lpy = Math.max(0, lpy-PADDLE_SPEED);
     else if (lact===2) lpy = Math.min(CH-PADDLE_H, lpy+PADDLE_SPEED);
     if (ract===0) rpy = Math.max(0, rpy-PADDLE_SPEED);
     else if (ract===2) rpy = Math.min(CH-PADDLE_H, rpy+PADDLE_SPEED);
 
-    // Move ball
+    // Pomjeranje loptice
     bx+=bdx; by+=bdy;
     let lr=0, rr=0;
 
-    // Wall bounce
+    // Odbijanje od zida
     if (by<=0) { by=0; bdy=Math.abs(bdy); }
     if (by>=CH-BALL_SIZE) { by=CH-BALL_SIZE; bdy=-Math.abs(bdy); }
 
-    // Left paddle collision
+    // Kolizija s lijevim paddleom
     if (bx<=PADDLE_W+10 && bx>=0 && by+BALL_SIZE>=lpy && by<=lpy+PADDLE_H) {
       bdx=Math.abs(bdx)*1.05;
       const rel=((by+BALL_SIZE/2)-(lpy+PADDLE_H/2))/(PADDLE_H/2);
@@ -630,7 +629,7 @@ function simGame(agentLeft, agentRight, maxSteps=5000) {
       bx=PADDLE_W+11;
       lr=1;
     }
-    // Right paddle collision
+    // Kolizija s desnim paddleom
     if (bx+BALL_SIZE>=CW-PADDLE_W-10 && bx<=CW && by+BALL_SIZE>=rpy && by<=rpy+PADDLE_H) {
       bdx=-Math.abs(bdx)*1.05;
       const rel=((by+BALL_SIZE/2)-(rpy+PADDLE_H/2))/(PADDLE_H/2);
@@ -639,37 +638,56 @@ function simGame(agentLeft, agentRight, maxSteps=5000) {
       rr=1;
     }
 
-    // Score
+    // Gol
+    let scored = false;
     if (bx<0) {
-      rscore++; lr=-1; rr=1;
+      rscore++; lr=-1; rr=1; scored=true;
       bx=CW/2; by=CH/2;
       const a2 = (Math.random()*0.8+0.1)*Math.PI*(Math.random()<0.5?1:-1);
       bdx=Math.cos(a2)*spd; bdy=Math.sin(a2)*spd;
     }
     if (bx>CW) {
-      lscore++; rr=-1; lr=1;
+      lscore++; rr=-1; lr=1; scored=true;
       bx=CW/2; by=CH/2;
       const a2 = (Math.random()*0.8+0.1)*Math.PI*(Math.random()<0.5?1:-1);
       bdx=Math.cos(a2)*spd; bdy=Math.sin(a2)*spd;
     }
 
-    // Learn
+    // Nova stanja nakon pomjeranja
     const lstate2 = agentLeft.encodeState(bx,by,bdx,bdy,lpy,rpy);
-    agentLeft.update(lstate,lact,lr,lstate2);
-    agentLeft.decayEpsilon();
+    const rstate2 = rightAgent.encodeState(CW-bx,by,-bdx,bdy,rpy,lpy);
+
+    // Experience Replay: spremi iskustvo u buffer, uci iz random mini-batcha
+    agentLeft.pushReplay(lstate, lact, lr, lstate2);
+    agentLeft.learnFromReplay();
 
     if (agentRight) {
-      const rstate2 = agentRight.encodeState(CW-bx,by,-bdx,bdy,rpy,lpy);
-      agentRight.update(rstate,ract,rr,rstate2);
-      agentRight.decayEpsilon();
+      agentRight.pushReplay(rstate, ract, rr, rstate2);
+      agentRight.learnFromReplay();
     } else {
-      // self-play: use mirror state
-      const rstate2 = agentLeft.encodeState(CW-bx,by,-bdx,bdy,rpy,lpy);
-      agentLeft.update(rstate,ract,rr,rstate2);
+      // Self-play: isti agent uci i iz desne perspektive
+      agentLeft.pushReplay(rstate, ract, rr, rstate2);
+      agentLeft.learnFromReplay();
     }
 
     if (lscore>=7 || rscore>=7) break;
   }
+
+  // Kraj epizode: decay epsilon + provjeri sync target networka
+  agentLeft.decayEpsilon();
+  agentLeft.episodesSinceSync++;
+  if (agentLeft.episodesSinceSync >= agentLeft.targetSyncInterval) {
+    agentLeft.syncTargetNetwork();
+  }
+
+  if (agentRight && agentRight !== agentLeft) {
+    agentRight.decayEpsilon();
+    agentRight.episodesSinceSync++;
+    if (agentRight.episodesSinceSync >= agentRight.targetSyncInterval) {
+      agentRight.syncTargetNetwork();
+    }
+  }
+
   return {lscore, rscore};
 }
 
