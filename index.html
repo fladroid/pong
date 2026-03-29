@@ -200,6 +200,7 @@
     <h2 style="margin-top:16px;">▸ TOURNAMENT</h2>
     <div style="font-size:0.65rem; color:var(--phosphor-dim); margin-bottom:6px;" id="tournament-status">Round-robin: all trained agents vs each other</div>
     <button class="btn btn-tournament" onclick="startTournament()" id="btn-tournament" style="width:100%;">⚑ RUN TOURNAMENT</button>
+    <button class="btn btn-evolve" onclick="runEvolve()" id="btn-evolve" style="width:100%; margin-top:4px;">⚗ EVOLVE</button>
     <div id="tournament-log" style="font-size:0.62rem; color:var(--phosphor-dim); max-height:100px; overflow-y:auto; margin-top:6px;"></div>
 
     <h2 style="margin-top:16px;" data-i18n="panel_training">▸ TRAINING LOG</h2>
@@ -993,6 +994,113 @@ function finishTournament(results, trained, logEl, btn) {
   renderLeaderboard();
   renderAgentInfo();
   saveAgents();
+}
+
+// =====================================================================
+// EVOLVE — genetski algoritam za evoluciju hyperparametara
+// =====================================================================
+function runEvolve() {
+  if (trainingRunning) { notify('Cannot evolve while training is active'); return; }
+
+  // Uzmi sve trenirane agente, sortiraj po ratingu
+  const trained = Object.keys(agents)
+    .filter(k => agents[k].trained)
+    .sort((a, b) => agents[b].rating - agents[a].rating);
+
+  if (trained.length < 2) {
+    notify('Need at least 2 trained agents to evolve');
+    return;
+  }
+
+  // Top 2 roditelja
+  const parentA = agents[trained[0]];
+  const parentB = agents[trained[1]];
+
+  // Redni broj za EVO agente
+  const evoNums = Object.keys(agents)
+    .filter(k => k.startsWith('EVO_'))
+    .map(k => parseInt(k.replace('EVO_', '')) || 0);
+  let nextEvo = evoNums.length > 0 ? Math.max(...evoNums) + 1 : 1;
+
+  // Broj potomaka (3)
+  const NUM_CHILDREN = 3;
+  const children = [];
+
+  for (let c = 0; c < NUM_CHILDREN; c++) {
+    const name = 'EVO_' + String(nextEvo++).padStart(3, '0');
+
+    // CROSSOVER — svaki parametar nasumicno od jednog roditelja (50/50)
+    const cross = (a, b) => Math.random() < 0.5 ? a : b;
+
+    // MUTACIJA — Gaussian pomak ±gaussian(0, sigma)
+    // sigma je relativna (5% vrijednosti) da mutacija bude proporcionalna
+    const mutate = (v, sigma=0.05, min=0, max=1) => {
+      // Box-Muller transform za Gaussian random
+      const u1 = Math.random(), u2 = Math.random();
+      const gauss = Math.sqrt(-2 * Math.log(u1)) * Math.cos(2 * Math.PI * u2);
+      return Math.min(max, Math.max(min, v + gauss * sigma * v));
+    };
+
+    const lr           = mutate(cross(parentA.lr,           parentB.lr),           0.05, 0.001, 1.0);
+    const discount     = mutate(cross(parentA.discount,     parentB.discount),     0.02, 0.5,   0.999);
+    const epsilonDecay = mutate(cross(parentA.epsilonDecay, parentB.epsilonDecay), 0.01, 0.99,  0.9999);
+    const trainSpeed   = mutate(cross(parentA.trainSpeed,   parentB.trainSpeed),   0.05, 2,     12);
+
+    agents[name] = new QLearningAgent({
+      name,
+      lr:           parseFloat(lr.toFixed(4)),
+      discount:     parseFloat(discount.toFixed(4)),
+      epsilon:      1.0,  // svaki potomak pocinje s punom eksplorацijom
+      epsilonDecay: parseFloat(epsilonDecay.toFixed(5)),
+      trainSpeed:   parseFloat(trainSpeed.toFixed(1)),
+    });
+
+    children.push(name);
+  }
+
+  saveAgents();
+  renderAgentList();
+  updateMatchSetup();
+
+  // Log u tournament panel
+  const logEl = document.getElementById('tournament-log');
+  const entry = document.createElement('div');
+  entry.style.cssText = 'border-top:1px solid #00ff4133; padding-top:4px; margin-top:4px;';
+  entry.innerHTML = `<div style="color:#88ffaa">⚗ Evolution: parents <strong>${trained[0]}</strong> × <strong>${trained[1]}</strong></div>`
+    + children.map(n => {
+        const a = agents[n];
+        return `<div style="color:#66ff88">&nbsp;→ ${n}: lr=${a.lr} γ=${a.discount} decay=${a.epsilonDecay} spd=${a.trainSpeed}</div>`;
+      }).join('');
+  logEl.prepend(entry);
+
+  document.getElementById('tournament-status').textContent =
+    `Evolved ${NUM_CHILDREN} children from ${trained[0]} × ${trained[1]}`;
+
+  notify(`⚗ Evolved ${NUM_CHILDREN} agents from ${trained[0]} × ${trained[1]} — training...`, 4000);
+
+  // Treniraj sve potomke sekvencijalno
+  const episodes = parseInt(document.getElementById('new-episodes').value) || 3000;
+  let idx = 0;
+  function trainNext() {
+    if (idx >= children.length) {
+      notify(`⚗ Evolution complete — ${children.join(', ')} ready`, 4000);
+      renderLeaderboard();
+      return;
+    }
+    const name = children[idx++];
+    setTimeout(() => {
+      startTrainingAgent(name, episodes);
+      // Sljedeci potomak ce se pokrenuti kad training zavrsi — koristimo observer pattern
+      // Jednostavnije: pratimo totalEpisodes
+      const waitForTraining = setInterval(() => {
+        if (!trainingRunning) {
+          clearInterval(waitForTraining);
+          trainNext();
+        }
+      }, 500);
+    }, 200);
+  }
+  trainNext();
 }
 
 // =====================================================================

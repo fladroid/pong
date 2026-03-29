@@ -256,6 +256,8 @@ header p.subtitle {
 .btn-tournament { border-color: #ffaa00; color: #ffaa00; }
 .btn-tournament:hover { background: #ffaa0022; }
 .btn-tournament:disabled { opacity: 0.4; cursor: not-allowed; }
+.btn-evolve { border-color: #88ffaa; color: #88ffaa; }
+.btn-evolve:hover { background: #88ffaa22; }
 .btn-xray.active { border-color: #00aaff; color: #000; background: #00aaff; box-shadow: 0 0 12px #00aaffaa; }
 
 /* Training progress */
