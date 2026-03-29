@@ -341,6 +341,16 @@ class QLearningAgent {
    * Export ostaje iste veličine kao prije (~864KB Q-table + metadata).
    */
   toJSON() {
+    // Sparse encoding Q-table: cuvamo samo nenulte vrijednosti kao [index, value] parove.
+    // Stedi ~70-90% prostora jer vecina Q vrijednosti ostaje 0.
+    // Format: {i: [idx0, idx1, ...], v: [val0, val1, ...]}
+    const qi = [], qv = [];
+    for (let i = 0; i < this.Q.length; i++) {
+      if (this.Q[i] !== 0) {
+        qi.push(i);
+        qv.push(Math.round(this.Q[i] * 10000) / 10000); // 4 decimale dovoljno
+      }
+    }
     return {
       name: this.name, lr: this.lr, discount: this.discount,
       epsilon: this.epsilon, epsilonDecay: this.epsilonDecay,
@@ -349,7 +359,7 @@ class QLearningAgent {
       trainLog: this.trainLog, trained: this.trained,
       bufferSize: this.bufferSize, batchSize: this.batchSize,
       targetSyncInterval: this.targetSyncInterval,
-      Q: Array.from(this.Q)
+      Qs: {i: qi, v: qv}  // sparse format
     };
   }
 
@@ -360,6 +370,14 @@ class QLearningAgent {
    * Stari agenti bez bufferSize/batchSize/targetSyncInterval dobivaju
    * default vrijednosti — rade s novim algoritmom bez problema.
    */
+  // toJSONExport — dense format za download/analizu (backward compatible)
+  toJSONExport() {
+    const base = this.toJSON();
+    delete base.Qs;
+    base.Q = Array.from(this.Q);
+    return base;
+  }
+
   static fromJSON(d) {
     const a = new QLearningAgent(d);
     a.totalEpisodes = d.totalEpisodes;
@@ -368,8 +386,15 @@ class QLearningAgent {
     a.rating = d.rating;
     a.trainLog = d.trainLog || [];
     a.trained  = d.trained;
-    a.Q = new Float32Array(d.Q);
-    // Target Q inicijalizujemo kopijom online Q (konzistentno stanje)
+
+    // Podrska za stari dense format (d.Q) i novi sparse format (d.Qs)
+    if (d.Qs) {
+      a.Q = new Float32Array(STATE_SIZE * ACTIONS); // sve nule
+      const {i: idxs, v: vals} = d.Qs;
+      for (let k = 0; k < idxs.length; k++) a.Q[idxs[k]] = vals[k];
+    } else if (d.Q) {
+      a.Q = new Float32Array(d.Q); // backward compat
+    }
     a.targetQ.set(a.Q);
     return a;
   }

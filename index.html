@@ -1747,7 +1747,7 @@ document.addEventListener('keyup',e=>{ keys[e.key]=false; });
 
 function exportAllJSON() {
   const data = {};
-  for (const k in agents) data[k] = agents[k].toJSON();
+  for (const k in agents) data[k] = agents[k].toJSONExport();
   if (!Object.keys(data).length) { notify(t('no_agent_selected')); return; }
   const blob = new Blob([JSON.stringify(data, null, 2)], {type:'application/json'});
   const url = URL.createObjectURL(blob);
