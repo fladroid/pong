@@ -251,6 +251,9 @@ header p.subtitle {
 .btn-amber { border-color: var(--amber); color: var(--amber); }
 .btn-xray  { border-color: #00aaff; color: #00aaff; }
 .btn-xray.active { border-color: #00aaff; color: #000; background: #00aaff; box-shadow: 0 0 12px #00aaffaa; }
+.btn-gen   { border-color: #aa66ff; color: #aa66ff; }
+.btn-gen:hover { background: #aa66ff22; }
+.btn-xray.active { border-color: #00aaff; color: #000; background: #00aaff; box-shadow: 0 0 12px #00aaffaa; }
 
 /* Training progress */
 #train-progress-wrap { margin-top: 10px; display: none; }

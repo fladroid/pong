@@ -51,6 +51,7 @@
     <h2 data-i18n="panel_agents">▸ AGENTS</h2>
     <div id="agent-list"></div>
     <button class="btn btn-primary" onclick="openCreateAgent()" style="width:100%; margin-top:8px" data-i18n="btn_new_agent">+ NEW AGENT</button>
+    <button class="btn btn-gen" onclick="autoGenerateAgent()" style="width:100%; margin-top:4px" title="Generate agent with random hyperparameters and train immediately">⚙ AUTO-GENERATE</button>
 
     <div id="create-agent-form" style="display:none; margin-top:12px; border-top:1px solid var(--panel-border); padding-top:12px;">
       <div class="form-group">
@@ -790,6 +791,56 @@ function openCreateAgent() {
   document.getElementById('new-agent-name').value = 'AGENT_' + String(Object.keys(agents).length+1).padStart(2,'0');
 }
 function closeCreateAgent() { document.getElementById('create-agent-form').style.display='none'; }
+
+function autoGenerateAgent() {
+  // Generisanje rednog broja — broji sve GEN_ agente i uzima sljedeci
+  const genNums = Object.keys(agents)
+    .filter(k => k.startsWith('GEN_'))
+    .map(k => parseInt(k.replace('GEN_','')) || 0);
+  const nextNum = genNums.length > 0 ? Math.max(...genNums) + 1 : 1;
+  const name = 'GEN_' + String(nextNum).padStart(3, '0');
+
+  // Nasumicni hyperparametri unutar razumnih raspona
+  const rand = (min, max, decimals=4) => {
+    const v = min + Math.random() * (max - min);
+    return parseFloat(v.toFixed(decimals));
+  };
+
+  const params = {
+    name,
+    lr:           rand(0.05, 0.5,  3),
+    discount:     rand(0.90, 0.999, 3),
+    epsilon:      1.0,                   // uvijek puna eksploracija na pocetku
+    epsilonDecay: rand(0.999, 0.9999, 4),
+    trainSpeed:   rand(4, 8, 1),
+  };
+
+  agents[name] = new QLearningAgent(params);
+  saveAgents();
+  selectAgent(name);
+  renderAgentList();
+  updateMatchSetup();
+
+  // Odmah treniraj s default brojem epizoda (iz forme, ili 3000)
+  const episodes = parseInt(document.getElementById('new-episodes').value) || 3000;
+  notify(`⚙ ${name} generated — training ${episodes.toLocaleString()} episodes...`, 4000);
+
+  // Kratka odgoda da UI ima vremena ažurirati se
+  setTimeout(() => startTrainingAgent(name, episodes), 100);
+}
+
+function startTrainingAgent(agentName, episodes) {
+  if (trainingRunning) { notify('Training already running'); return; }
+  const agent = agents[agentName];
+  if (!agent) return;
+
+  // Privremeno postavi selectedAgent da startTraining() radi ispravno
+  const prevSelected = selectedAgent;
+  selectedAgent = agentName;
+  document.getElementById('new-episodes').value = episodes;
+  startTraining();
+  selectedAgent = prevSelected || agentName;
+}
 
 function createAgent() {
   const name = document.getElementById('new-agent-name').value.trim().toUpperCase().replace(/[^A-Z0-9_-]/g,'') || 'AGENT';
