@@ -707,6 +707,7 @@ let currentMode = 'hvsa';
 let gameState = null; // live game
 let animFrame = null;
 let trainingRunning = false;
+let onTrainingComplete = null; // callback pozvan na kraju treninga
 let keys = {};
 let lastFpsTime = 0, frameCount = 0, displayFps = 0;
 
@@ -1078,7 +1079,7 @@ function runEvolve() {
 
   notify(`⚗ Evolved ${NUM_CHILDREN} agents from ${trained[0]} × ${trained[1]} — training...`, 4000);
 
-  // Treniraj sve potomke sekvencijalno
+  // Treniraj sve potomke sekvencijalno koristeci callback lanac
   const episodes = parseInt(document.getElementById('new-episodes').value) || 3000;
   let idx = 0;
   function trainNext() {
@@ -1088,17 +1089,9 @@ function runEvolve() {
       return;
     }
     const name = children[idx++];
-    setTimeout(() => {
-      startTrainingAgent(name, episodes);
-      // Sljedeci potomak ce se pokrenuti kad training zavrsi — koristimo observer pattern
-      // Jednostavnije: pratimo totalEpisodes
-      const waitForTraining = setInterval(() => {
-        if (!trainingRunning) {
-          clearInterval(waitForTraining);
-          trainNext();
-        }
-      }, 500);
-    }, 200);
+    // Postavi callback koji ce pozvati trainNext() kad ovaj agent zavrsi trening
+    onTrainingComplete = trainNext;
+    startTrainingAgent(name, episodes);
   }
   trainNext();
 }
@@ -1162,6 +1155,7 @@ function finishTraining(agent, done, winCount, total) {
   document.getElementById('train-progress-wrap').style.display='none';
   setStatus(t('status_ready'));
   notify(t('train_complete') + ` — ${agent.name}: ${done.toLocaleString()} ep, WR ${wr}%`);
+  if (onTrainingComplete) { const cb = onTrainingComplete; onTrainingComplete = null; cb(); }
 }
 
 // =====================================================================
