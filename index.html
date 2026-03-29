@@ -1101,15 +1101,20 @@ function runEvolve() {
 
   // Treniraj sve potomke sekvencijalno koristeci callback lanac
   const episodes = parseInt(document.getElementById('new-episodes').value) || 3000;
+  const evoBtn = document.getElementById('btn-evolve');
+  evoBtn.disabled = true;
+
   let idx = 0;
   function trainNext() {
     if (idx >= children.length) {
+      // Evolucija gotova — ocisti sve
+      onTrainingComplete = null;
+      evoBtn.disabled = false;
       notify(`⚗ Evolution complete — ${children.join(', ')} ready`, 4000);
       renderLeaderboard();
       return;
     }
     const name = children[idx++];
-    // Postavi callback koji ce pozvati trainNext() kad ovaj agent zavrsi trening
     onTrainingComplete = trainNext;
     startTrainingAgent(name, episodes);
   }
@@ -1175,7 +1180,11 @@ function finishTraining(agent, done, winCount, total) {
   document.getElementById('train-progress-wrap').style.display='none';
   setStatus(t('status_ready'));
   notify(t('train_complete') + ` — ${agent.name}: ${done.toLocaleString()} ep, WR ${wr}%`);
-  if (onTrainingComplete) { const cb = onTrainingComplete; onTrainingComplete = null; cb(); }
+  if (typeof onTrainingComplete === 'function') {
+    const cb = onTrainingComplete;
+    onTrainingComplete = null;
+    cb();
+  }
 }
 
 // =====================================================================
