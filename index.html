@@ -831,9 +831,7 @@ function autoGenerateAgent() {
   // Odmah treniraj s default brojem epizoda (iz forme, ili 3000)
   const episodes = parseInt(document.getElementById('new-episodes').value) || 3000;
   notify(`⚙ ${name} generated — training ${episodes.toLocaleString()} episodes...`, 4000);
-
-  // Kratka odgoda da UI ima vremena ažurirati se
-  setTimeout(() => startTrainingAgent(name, episodes), 100);
+  startTrainingAgent(name, episodes);
 }
 
 function startTrainingAgent(agentName, episodes) {
@@ -841,12 +839,34 @@ function startTrainingAgent(agentName, episodes) {
   const agent = agents[agentName];
   if (!agent) return;
 
-  // Privremeno postavi selectedAgent da startTraining() radi ispravno
-  const prevSelected = selectedAgent;
-  selectedAgent = agentName;
-  document.getElementById('new-episodes').value = episodes;
-  startTraining();
-  selectedAgent = prevSelected || agentName;
+  // Direktan trening — ne oslanja se na selectedAgent ni UI formu
+  trainingRunning = true;
+  document.getElementById('train-progress-wrap').style.display = 'block';
+  document.getElementById('btn-train').disabled = true;
+  setStatus(t('status_training'));
+
+  const BATCH = 50;
+  let done = 0, winCount = 0;
+
+  function tick() {
+    if (!trainingRunning) { finishTraining(agent, done, winCount, episodes); return; }
+    const batchSize = Math.min(BATCH, episodes - done);
+    for (let i = 0; i < batchSize; i++) {
+      const res = simGame(agent, null, 3000);
+      if (res.lscore > res.rscore) winCount++;
+    }
+    done += batchSize;
+    const pct = done / episodes * 100;
+    document.getElementById('train-bar').style.width = pct + '%';
+    document.getElementById('train-stats').textContent =
+      `${agentName}: ${done.toLocaleString()} / ${episodes.toLocaleString()} ${t('episodes_done')} — WR: ${(winCount/done*100).toFixed(1)}%`;
+    if (done >= episodes) {
+      finishTraining(agent, done, winCount, episodes);
+    } else {
+      requestAnimationFrame(tick);
+    }
+  }
+  requestAnimationFrame(tick);
 }
 
 function createAgent() {
