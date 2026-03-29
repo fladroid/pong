@@ -197,6 +197,11 @@
     <h2 style="margin-top:16px;" data-i18n="panel_leaderboard">▸ LEADERBOARD</h2>
     <div id="lb-display"></div>
 
+    <h2 style="margin-top:16px;">▸ TOURNAMENT</h2>
+    <div style="font-size:0.65rem; color:var(--phosphor-dim); margin-bottom:6px;" id="tournament-status">Round-robin: all trained agents vs each other</div>
+    <button class="btn btn-tournament" onclick="startTournament()" id="btn-tournament" style="width:100%;">⚑ RUN TOURNAMENT</button>
+    <div id="tournament-log" style="font-size:0.62rem; color:var(--phosphor-dim); max-height:100px; overflow-y:auto; margin-top:6px;"></div>
+
     <h2 style="margin-top:16px;" data-i18n="panel_training">▸ TRAINING LOG</h2>
     <div id="train-log" style="font-size:0.65rem; color:var(--phosphor-dim); max-height:180px; overflow-y:auto;">
       <div data-i18n="no_training_yet">No training sessions yet.</div>
@@ -876,6 +881,118 @@ function resetAgentParams(name) {
   a.lr=0.1; a.discount=0.95; a.epsilon=0.1; a.epsilonDecay=0.9995; a.trainSpeed=5;
   saveAgents();
   renderAgentInfo();
+}
+
+// =====================================================================
+// TOURNAMENT
+// =====================================================================
+function startTournament() {
+  if (trainingRunning) { notify('Cannot run tournament while training is active'); return; }
+
+  // Skupi sve trenirane agente
+  const trained = Object.keys(agents).filter(k => agents[k].trained);
+  if (trained.length < 2) {
+    notify('Need at least 2 trained agents for a tournament');
+    return;
+  }
+
+  // Generiši sve parove (round-robin)
+  const pairs = [];
+  for (let i = 0; i < trained.length; i++) {
+    for (let j = i + 1; j < trained.length; j++) {
+      pairs.push([trained[i], trained[j]]);
+    }
+  }
+
+  const btn = document.getElementById('btn-tournament');
+  btn.disabled = true;
+  const logEl = document.getElementById('tournament-log');
+  logEl.innerHTML = '';
+  document.getElementById('tournament-status').textContent =
+    `Running ${pairs.length} matches between ${trained.length} agents...`;
+
+  // Rezultati po agentu: { wins, losses, points }
+  const results = {};
+  trained.forEach(k => { results[k] = { wins: 0, losses: 0, points: 0 }; });
+
+  let pairIdx = 0;
+
+  function runNextPair() {
+    if (pairIdx >= pairs.length) {
+      finishTournament(results, trained, logEl, btn);
+      return;
+    }
+
+    const [nameA, nameB] = pairs[pairIdx++];
+    const agentA = agents[nameA];
+    const agentB = agents[nameB];
+
+    // Headless meč — 7 poena za pobjedu (isti kao live igra)
+    const res = simGame(agentA, agentB, 8000);
+    const aWon = res.lscore > res.rscore;
+
+    if (aWon) {
+      results[nameA].wins++;
+      results[nameB].losses++;
+      results[nameA].points += 2;
+    } else {
+      results[nameB].wins++;
+      results[nameA].losses++;
+      results[nameB].points += 2;
+    }
+
+    // Ažuriraj rating agenata
+    const wKey = aWon ? nameA : nameB;
+    const lKey = aWon ? nameB : nameA;
+    const wFactor = agents[wKey].ratingFactor();
+    const change = Math.round(15 * wFactor);
+    agents[wKey].rating += change;
+    agents[lKey].rating = Math.max(0, agents[lKey].rating - change);
+    agents[wKey].wins++;
+    agents[lKey].losses++;
+
+    // Log rezultata
+    const winner = aWon ? nameA : nameB;
+    const score = `${res.lscore}:${res.rscore}`;
+    const entry = document.createElement('div');
+    entry.style.borderBottom = '1px solid #00ff4122';
+    entry.style.padding = '2px 0';
+    entry.innerHTML = `<span style="color:#00ff41">${nameA}</span> vs <span style="color:#00ff41">${nameB}</span> → <span style="color:#ffaa00">${score}</span> → <strong style="color:#00ff41">${winner}</strong>`;
+    logEl.prepend(entry);
+
+    saveAgents();
+    renderLeaderboard();
+
+    // Sljedeci par u sljedecem animation frame — UI ostaje responsivan
+    requestAnimationFrame(runNextPair);
+  }
+
+  requestAnimationFrame(runNextPair);
+}
+
+function finishTournament(results, trained, logEl, btn) {
+  // Sortiraj po poenima
+  const sorted = trained.slice().sort((a, b) => results[b].points - results[a].points);
+  const winner = sorted[0];
+  const medals = ['🥇', '🥈', '🥉'];
+
+  // Krajnji pregled
+  const summary = document.createElement('div');
+  summary.style.cssText = 'border-top:1px solid #00ff4155; margin-top:4px; padding-top:4px;';
+  summary.innerHTML = sorted.map((k, i) => {
+    const r = results[k];
+    const medal = medals[i] || `${i+1}.`;
+    return `<div>${medal} <strong style="color:#00ff41">${k}</strong> — ${r.points}pts (${r.wins}W/${r.losses}L)</div>`;
+  }).join('');
+  logEl.prepend(summary);
+
+  document.getElementById('tournament-status').textContent = `Tournament complete — Winner: ${winner}`;
+  btn.disabled = false;
+
+  notify(`⚑ Tournament complete! Winner: ${winner} (${results[winner].points} points)`, 5000);
+  renderLeaderboard();
+  renderAgentInfo();
+  saveAgents();
 }
 
 // =====================================================================
